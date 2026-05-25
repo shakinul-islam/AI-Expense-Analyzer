@@ -1,4 +1,4 @@
-# AI-Powered Expense Analyzer
+# AI Expense Analyzer
 
 ## Team Information
 - **Team Name:** CSE4104-8A-T04
