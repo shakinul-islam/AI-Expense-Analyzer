@@ -1,7 +1,7 @@
 # AI-Powered Expense Analyzer
 
 ## Team Information
-- **Team Name:** CSE4104-[8A]-T[TeamNumber]
+- **Team Name:** CSE4104-8A-T04
 - **Members:** 
     - [Naim Sheikh]
     - [Ayon Banerjee]
