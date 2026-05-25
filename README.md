@@ -10,7 +10,7 @@
     - [Afia Rahman]
 
 ## Project Description
-The AI-Powered Expense Analyzer is a smart financial management tool designed to help users track their daily expenses effortlessly. By leveraging Artificial Intelligence, the application analyzes spending patterns and provides personalized insights and smart saving suggestions to improve financial health.
+The AI Expense Analyzer is a smart financial management tool designed to help users track their daily expenses effortlessly. By leveraging Artificial Intelligence, the application analyzes spending patterns and provides personalized insights and smart saving suggestions to improve financial health.
 
 ## Proposed Features
 - **User Authentication:** Secure sign-up and login system for personalized data management.
