@@ -2,6 +2,7 @@
 
 ## Team Information
 - **Team Name:** CSE4104-8A-T04
+- **Team Leader:** Md. Shakinul Islam
 - **Members:** 
     - [Naim Sheikh]
     - [Ayon Banerjee]
