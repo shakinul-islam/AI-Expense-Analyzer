@@ -37,6 +37,5 @@ The AI Expense Analyzer is an advanced personal finance management application d
 /
 ├── backend/          # Node.js + Express.js API source code
 ├── frontend/         # Flutter application source code
-├── docs/             # SRS and System Diagrams (PDF)
 ├── README.md         # Project documentation
 └── .gitignore        # Git ignore file
