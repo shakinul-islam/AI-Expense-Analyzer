@@ -1,4 +1,7 @@
-# Project: AI Expense Analyzer
+# AI Expense Analyzer
+
+## Project Overview
+The AI Expense Analyzer is an advanced personal finance management application developed using the Flutter framework for the frontend, Node.js and Express.js for the backend, and MongoDB for data persistence. Unlike traditional ledgers, this system integrates state-of-the-art machine learning capabilities via the Gemini API to bridge the gap between simple financial tracking and contextual financial management.
 
 ## Team Information
 * **Team Name:** CSE4204-8A-T04
@@ -7,9 +10,6 @@
     * Naim Sheikh
     * Ayon Banerjee
     * Afia Rahman
-
-## Project Overview
-The AI Expense Analyzer is an advanced personal finance management application developed using the Flutter framework for the frontend, Node.js and Express.js for the backend, and MongoDB for data persistence. Unlike traditional ledgers, this system integrates state-of-the-art machine learning capabilities via the Gemini API to bridge the gap between simple financial tracking and contextual financial management.
 
 ## Objectives
 * **Develop an Intelligent Financial Tracking Platform:** Seamless recording, categorizing, and visualizing of daily income and expenses.
@@ -30,6 +30,6 @@ The AI Expense Analyzer is an advanced personal finance management application d
 ├── frontend/         # Flutter application source code
 ├── database/         # Database schemas and ER diagrams
 ├── documentation/    # System Design PDF, SRS, and project reports
-├── diagrams/         # Architecture, Use Case, and Activity diagrams
+├── design/           # UI/UX wireframes, screenshots, and User Flow diagrams
 ├── README.md         # Project documentation
 └── .gitignore        # Git ignore file
