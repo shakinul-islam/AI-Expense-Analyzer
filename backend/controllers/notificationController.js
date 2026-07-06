@@ -1,22 +1,31 @@
 const Notification = require('../models/Notification');
 
-
 exports.getNotifications = async (req, res) => {
     try {
         const notifications = await Notification.find({ userId: req.user.id })
-            .sort({ createdAt: -1 }); 
+            .sort({ created_at: -1 });
         res.status(200).json(notifications);
     } catch (error) {
+        console.error('Get Notifications Error:', error.message);
         res.status(500).json({ message: "Error fetching notifications" });
     }
 };
 
-
 exports.markAsRead = async (req, res) => {
     try {
-        await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
-        res.status(200).json({ message: "Marked as read" });
+        const notification = await Notification.findByIdAndUpdate(
+            req.params.id, 
+            { status: 'read' },
+            { new: true }
+        );
+        
+        if (!notification) {
+            return res.status(404).json({ message: "Notification not found" });
+        }
+        
+        res.status(200).json({ message: "Marked as read", notification });
     } catch (error) {
+        console.error('Mark as Read Error:', error.message);
         res.status(500).json({ message: "Error updating notification" });
     }
 };
