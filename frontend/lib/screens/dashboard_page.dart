@@ -118,9 +118,6 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // ==========================================
-  // BUDGET MANAGEMENT LOGIC
-  // ==========================================
   Future<void> _loadBudget() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -137,7 +134,6 @@ class _DashboardPageState extends State<DashboardPage> {
         final List<dynamic> budgets = jsonDecode(response.body);
         final now = DateTime.now();
 
-        // Find all budgets for the current month and get the latest one
         final currentBudgets = budgets
             .cast<Map<String, dynamic>>()
             .where((b) => b['month'] == now.month && b['year'] == now.year)
@@ -260,11 +256,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // ==========================================
-  // TRANSACTION DELETION LOGIC
-  // ==========================================
   Future<void> _deleteTransaction(String id) async {
-    // Optimistically remove from UI for a snappy experience
     setState(() {
       _transactions.removeWhere((t) => t['_id'] == id);
       _calculateTotals();
@@ -287,14 +279,7 @@ class _DashboardPageState extends State<DashboardPage> {
               content: Text('Transaction deleted successfully'),
               backgroundColor: Colors.green),
         );
-        _loadSummary(); // Refresh charts
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Removed locally. Add backend DELETE route for permanent sync.'),
-              backgroundColor: Colors.orange),
-        );
+        _loadSummary();
       }
     } catch (e) {
       print('Delete error: $e');
@@ -391,6 +376,28 @@ class _DashboardPageState extends State<DashboardPage> {
     return _notifications.where((n) => n['status'] == 'unread').length;
   }
 
+  // 🚀 BD Time Formatter
+  String _formatToBDTime(String? dateString) {
+    if (dateString == null) return '';
+    try {
+      DateTime parsedUTC = DateTime.parse(dateString).toUtc();
+      DateTime bdTime = parsedUTC.add(const Duration(hours: 6)); // UTC + 6
+      return DateFormat('MMM dd, yyyy - hh:mm a').format(bdTime);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // 🚀 Dynamic Budget Text Formatter
+  String _formatNotificationMessage(String originalMsg) {
+    if (_monthlyBudget > 0 && originalMsg.contains('budget of')) {
+      // Replace the hardcoded budget number with the current dynamic budget
+      return originalMsg.replaceAll(RegExp(r'budget of ৳[0-9]+'),
+          'budget of ৳${_monthlyBudget.toStringAsFixed(0)}');
+    }
+    return originalMsg;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -415,7 +422,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: CustomScrollView(
                     slivers: [
                       SliverAppBar(
-                        expandedHeight: 160, // Reduced height to fix overlap
+                        expandedHeight: 160,
                         floating: false,
                         pinned: true,
                         backgroundColor: Colors.indigo,
@@ -534,20 +541,14 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ],
                       ),
-
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                         sliver: SliverToBoxAdapter(child: _buildBudgetWidget()),
                       ),
-
                       SliverPadding(
                         padding: const EdgeInsets.all(16),
                         sliver: SliverToBoxAdapter(child: _buildSummaryCards()),
                       ),
-
-                      // =====================================
-                      // 📊 Interactive Data Visualization
-                      // =====================================
                       if (_transactions.isNotEmpty)
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -571,7 +572,6 @@ class _DashboardPageState extends State<DashboardPage> {
                             ),
                           ),
                         ),
-
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         sliver: SliverToBoxAdapter(
@@ -597,7 +597,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ),
                       ),
-
                       _transactions.isEmpty
                           ? SliverToBoxAdapter(child: _buildEmptyState())
                           : SliverList(
@@ -1157,7 +1156,6 @@ class _DashboardPageState extends State<DashboardPage> {
         : '';
     final id = transaction['_id'] ?? transaction.hashCode.toString();
 
-    // 🚀 Smart Swipe-to-Delete Added Here
     return Dismissible(
       key: Key(id),
       direction: DismissDirection.endToStart,
@@ -1202,8 +1200,6 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
                 color: Colors.grey.withOpacity(0.05),
@@ -1211,46 +1207,56 @@ class _DashboardPageState extends State<DashboardPage> {
                 offset: const Offset(0, 2)),
           ],
         ),
-        child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          title: Text(
-            transaction['category'] ?? 'Transaction',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              date,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _showTransactionDetails(transaction),
+            child: ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              title: Text(
+                transaction['category'] ?? 'Transaction',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  date,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${isIncome ? '+' : '-'}৳${amount.toStringAsFixed(0)}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isIncome ? 'Income' : 'Expense',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
             ),
           ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${isIncome ? '+' : '-'}৳${amount.toStringAsFixed(0)}',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, color: color, fontSize: 16),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                isIncome ? 'Income' : 'Expense',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          onTap: () => _showTransactionDetails(transaction),
         ),
       ),
     );
@@ -1482,6 +1488,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // 🚀 Modified: Swipe to Delete, BD Time format & Dynamic Budget Text implemented
   void _showNotificationsDialog() {
     showModalBottomSheet(
       context: context,
@@ -1523,75 +1530,127 @@ class _DashboardPageState extends State<DashboardPage> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: _notifications.length,
-                      itemBuilder: (context, index) {
-                        final notification = _notifications[index];
-                        final isUnread = notification['status'] == 'unread';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 0,
-                          color: isUnread
-                              ? Colors.indigo.shade50
-                              : Colors.grey.shade50,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(
-                                color: isUnread
-                                    ? Colors.indigo.shade100
-                                    : Colors.transparent),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(16),
-                            leading: CircleAvatar(
-                              backgroundColor: isUnread
-                                  ? Colors.indigo
-                                  : Colors.grey.shade300,
-                              child: Icon(
-                                Icons.notifications_active,
-                                color: isUnread
-                                    ? Colors.white
-                                    : Colors.grey.shade500,
-                                size: 20,
+                  : StatefulBuilder(
+                      // StatefulBuilder to rebuild this specific bottom sheet context
+                      builder:
+                          (BuildContext context, StateSetter setModalState) {
+                      return ListView.builder(
+                        itemCount: _notifications.length,
+                        itemBuilder: (context, index) {
+                          final notification = _notifications[index];
+                          final isUnread = notification['status'] == 'unread';
+                          final String notificationId =
+                              notification['_id'] ?? index.toString();
+
+                          // Replace old 1000 with current active budget
+                          final String dynamicMessage =
+                              _formatNotificationMessage(
+                                  notification['message'] ?? '');
+                          // Format to BD Time
+                          final String bdTimeText =
+                              _formatToBDTime(notification['created_at']);
+
+                          return Dismissible(
+                            key: Key(notificationId),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade400,
+                                borderRadius: BorderRadius.circular(16),
                               ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              child: const Icon(Icons.delete_outline,
+                                  color: Colors.white, size: 28),
                             ),
-                            title: Text(
-                              notification['title'] ?? 'Alert',
-                              style: TextStyle(
-                                  fontWeight: isUnread
-                                      ? FontWeight.bold
-                                      : FontWeight.w600,
-                                  fontSize: 16),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                notification['message'] ?? '',
-                                style: TextStyle(
-                                    color: Colors.grey.shade700, height: 1.3),
-                              ),
-                            ),
-                            trailing: isUnread
-                                ? Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: const BoxDecoration(
-                                        color: Colors.redAccent,
-                                        shape: BoxShape.circle))
-                                : null,
-                            onTap: () async {
-                              if (isUnread) {
-                                await ApiService()
-                                    .markNotificationRead(notification['_id']);
-                                _refreshData();
-                                Navigator.pop(context);
-                                _showNotificationsDialog();
-                              }
+                            onDismissed: (direction) {
+                              setModalState(() {
+                                _notifications.removeAt(index);
+                              });
+                              // To make this permanent, you need a delete route in your backend!
+                              // ApiService().deleteNotification(notificationId);
                             },
-                          ),
-                        );
-                      },
-                    ),
+                            child: Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 0,
+                              color: isUnread
+                                  ? Colors.indigo.shade50
+                                  : Colors.grey.shade50,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                    color: isUnread
+                                        ? Colors.indigo.shade100
+                                        : Colors.transparent),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(16),
+                                leading: CircleAvatar(
+                                  backgroundColor: isUnread
+                                      ? Colors.indigo
+                                      : Colors.grey.shade300,
+                                  child: Icon(
+                                    Icons.notifications_active,
+                                    color: isUnread
+                                        ? Colors.white
+                                        : Colors.grey.shade500,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      notification['title'] ?? 'Alert',
+                                      style: TextStyle(
+                                          fontWeight: isUnread
+                                              ? FontWeight.bold
+                                              : FontWeight.w600,
+                                          fontSize: 16),
+                                    ),
+                                    if (bdTimeText.isNotEmpty)
+                                      Text(
+                                        bdTimeText,
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey.shade500),
+                                      ),
+                                  ],
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    dynamicMessage,
+                                    style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        height: 1.3),
+                                  ),
+                                ),
+                                trailing: isUnread
+                                    ? Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle))
+                                    : null,
+                                onTap: () async {
+                                  if (isUnread) {
+                                    await ApiService().markNotificationRead(
+                                        notification['_id']);
+                                    _refreshData();
+                                    Navigator.pop(context);
+                                    _showNotificationsDialog();
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }),
             ),
           ],
         ),

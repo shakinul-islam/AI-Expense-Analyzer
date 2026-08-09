@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 
 class AiChatPage extends StatefulWidget {
@@ -11,7 +12,7 @@ class AiChatPage extends StatefulWidget {
 class _AiChatPageState extends State<AiChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<Map<String, dynamic>> _messages = [];
+  final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   bool _isGeneratingReport = false;
 
@@ -21,134 +22,94 @@ class _AiChatPageState extends State<AiChatPage> {
     _loadAIReports();
   }
 
-  // Load previous AI reports
   Future<void> _loadAIReports() async {
     setState(() => _isLoading = true);
     try {
       final reports = await ApiService().getAIReports();
       if (reports.isNotEmpty) {
-        // Add reports as messages from AI
         setState(() {
-          for (var report in reports) {
+          for (var report in reports.reversed) {
             _messages.add({
               'text': report['insight_text'] ?? 'No insights available',
               'isUser': false,
               'timestamp': report['generated_at'] ?? DateTime.now().toString(),
             });
           }
-          _isLoading = false;
         });
         _scrollToBottom();
       } else {
-        // Welcome message if no reports
-        setState(() {
-          _messages.add({
-            'text': '👋 Welcome to AI Assistant!\n\n'
-                'I can help you with:\n'
-                '• Generate spending insights\n'
-                '• Analyze your expenses\n'
-                '• Provide money-saving tips\n'
-                '• Answer financial questions\n\n'
-                'Click the "Generate Insight" button to get started!',
-            'isUser': false,
-            'timestamp': DateTime.now().toString(),
-          });
-          _isLoading = false;
-        });
+        _sendWelcomeMessage();
       }
     } catch (e) {
-      setState(() {
-        _messages.add({
-          'text': '👋 Welcome to AI Assistant!\n\n'
-              'I can help you manage your finances better. '
-              'Click the "Generate Insight" button to analyze your spending patterns.',
-          'isUser': false,
-          'timestamp': DateTime.now().toString(),
-        });
-        _isLoading = false;
-      });
+      _sendWelcomeMessage();
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  // Generate new insight
+  void _sendWelcomeMessage() {
+    setState(() {
+      _messages.add({
+        'text': '👋 Hello! I am your AI Financial Assistant.\n\n'
+            'You can ask me anything about your expenses, like:\n'
+            '• "How much did I spend on food this month?"\n'
+            '• "Do I have enough money left for shopping?"\n\n'
+            'Or tap "Generate Insight" above for a complete financial report!',
+        'isUser': false,
+        'timestamp': DateTime.now().toString(),
+      });
+    });
+  }
+
   Future<void> _generateInsight() async {
     if (_isGeneratingReport) return;
 
     setState(() {
       _isGeneratingReport = true;
       _messages.add({
-        'text': '🤔 Analyzing your transactions... Please wait.',
+        'text': 'Analyzing your transactions... Please wait.',
         'isUser': false,
         'timestamp': DateTime.now().toString(),
-        'isLoading': true,
+        'isTyping': true,
       });
     });
     _scrollToBottom();
 
     try {
       final response = await ApiService().generateInsight();
-      
-      // Remove loading message
-      setState(() {
-        _messages.removeWhere((msg) => msg['isLoading'] == true);
-      });
+      setState(() => _messages.removeWhere((msg) => msg['isTyping'] == true));
 
-      if (response['report'] != null) {
-        final insight = response['report']['insight_text'] ?? 'No insights available';
+      if (response['insight'] != null) {
         setState(() {
           _messages.add({
-            'text': insight,
+            'text': response['insight'],
             'isUser': false,
             'timestamp': DateTime.now().toString(),
           });
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ New insights generated successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
       } else {
-        setState(() {
-          _messages.add({
-            'text': '⚠️ No insights could be generated. Please ensure you have transactions recorded.',
-            'isUser': false,
-            'timestamp': DateTime.now().toString(),
-          });
-        });
+        throw Exception('No insight received');
       }
     } catch (e) {
-      // Remove loading message
       setState(() {
-        _messages.removeWhere((msg) => msg['isLoading'] == true);
+        _messages.removeWhere((msg) => msg['isTyping'] == true);
         _messages.add({
-          'text': '❌ Error: ${e.toString().replaceAll('Exception:', '')}',
+          'text':
+              '❌ Error generating insight: ${e.toString().replaceAll('Exception:', '')}',
           'isUser': false,
           'timestamp': DateTime.now().toString(),
         });
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ ${e.toString().replaceAll('Exception:', '')}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
     } finally {
       setState(() => _isGeneratingReport = false);
       _scrollToBottom();
     }
   }
 
-  // Send user message
   void _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    // Add user message
     setState(() {
       _messages.add({
         'text': text,
@@ -156,11 +117,6 @@ class _AiChatPageState extends State<AiChatPage> {
         'timestamp': DateTime.now().toString(),
       });
       _messageController.clear();
-    });
-    _scrollToBottom();
-
-    // Add typing indicator
-    setState(() {
       _messages.add({
         'text': '...',
         'isUser': false,
@@ -171,45 +127,25 @@ class _AiChatPageState extends State<AiChatPage> {
     _scrollToBottom();
 
     try {
-      // TODO: Implement chat API endpoint
-      // For now, send to generate insight or show default response
-      final response = await ApiService().generateInsight();
-      
-      // Remove typing indicator
-      setState(() {
-        _messages.removeWhere((msg) => msg['isTyping'] == true);
-      });
+      // 🚀 Append format instruction so the AI responds in a neat report-like manner
+      final query =
+          "$text\n\nPlease provide your answer in a well-formatted manner using bullet points and bold text where necessary.";
+      final answer = await ApiService().chatWithAI(query);
 
-      if (response['report'] != null) {
-        final insight = response['report']['insight_text'] ?? 
-            'I analyzed your request. Here are some insights based on your spending:';
-        setState(() {
-          _messages.add({
-            'text': insight,
-            'isUser': false,
-            'timestamp': DateTime.now().toString(),
-          });
-        });
-      } else {
-        setState(() {
-          _messages.add({
-            'text': 'I need to analyze your transactions first. Please click the "Generate Insight" button.',
-            'isUser': false,
-            'timestamp': DateTime.now().toString(),
-          });
-        });
-      }
-    } catch (e) {
-      // Remove typing indicator
       setState(() {
         _messages.removeWhere((msg) => msg['isTyping'] == true);
         _messages.add({
-          'text': '💡 You can ask me about:\n'
-              '• Spending patterns\n'
-              '• Budget recommendations\n'
-              '• Saving tips\n'
-              '• Financial planning\n\n'
-              'For detailed analysis, click the "Generate Insight" button.',
+          'text': answer,
+          'isUser': false,
+          'timestamp': DateTime.now().toString(),
+        });
+      });
+    } catch (e) {
+      setState(() {
+        _messages.removeWhere((msg) => msg['isTyping'] == true);
+        _messages.add({
+          'text':
+              'Sorry, I am having trouble connecting to the server. Please try again.',
           'isUser': false,
           'timestamp': DateTime.now().toString(),
         });
@@ -223,7 +159,7 @@ class _AiChatPageState extends State<AiChatPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          _scrollController.position.maxScrollExtent + 100,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -237,15 +173,10 @@ class _AiChatPageState extends State<AiChatPage> {
       final now = DateTime.now();
       final difference = now.difference(date);
 
-      if (difference.inDays > 0) {
-        return '${difference.inDays}d ago';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours}h ago';
-      } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes}m ago';
-      } else {
-        return 'Just now';
-      }
+      if (difference.inDays > 0) return '${difference.inDays}d ago';
+      if (difference.inHours > 0) return '${difference.inHours}h ago';
+      if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
+      return 'Just now';
     } catch (e) {
       return '';
     }
@@ -254,156 +185,110 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.auto_awesome, color: Colors.white),
-            SizedBox(width: 8),
-            Text('AI Assistant'),
+            Icon(Icons.auto_awesome, color: Colors.amberAccent),
+            SizedBox(width: 10),
+            Text('AI Assistant',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          // Refresh button
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _loadAIReports,
-            tooltip: 'Refresh conversations',
-          ),
-          // Clear chat button
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Clear Chat'),
-                  content: const Text('Are you sure you want to clear all messages?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _messages.clear();
-                          _messages.add({
-                            'text': 'Chat cleared. Start a new conversation!',
-                            'isUser': false,
-                            'timestamp': DateTime.now().toString(),
-                          });
-                        });
-                        Navigator.pop(context);
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                      child: const Text('Clear'),
-                    ),
-                  ],
-                ),
-              );
+              setState(() {
+                _messages.clear();
+                _sendWelcomeMessage();
+              });
             },
-            tooltip: 'Clear chat',
+            tooltip: 'Clear Chat',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Generate Insight Button
+          // Quick Action Bar
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200),
-              ),
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.grey.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4)),
+              ],
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isGeneratingReport ? null : _generateInsight,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.indigo,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: _isGeneratingReport
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.auto_awesome),
-                    label: Text(
-                      _isGeneratingReport ? 'Generating...' : 'Generate Insight',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
+                const Expanded(
+                  child: Text(
+                    'Need a detailed report?',
+                    style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
                   ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _isGeneratingReport ? null : _generateInsight,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo.shade50,
+                    foregroundColor: Colors.indigo,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  icon: _isGeneratingReport
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.analytics_outlined, size: 18),
+                  label: Text(
+                      _isGeneratingReport ? 'Analyzing...' : 'Generate Insight',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
               ],
             ),
           ),
-          // Chat Messages
+
+          // Chat Area
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.indigo))
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      final isUser = message['isUser'] ?? false;
-                      final isTyping = message['isTyping'] ?? false;
-                      final isLoading = message['isLoading'] ?? false;
-                      final text = message['text'] ?? '';
-                      final timestamp = message['timestamp'] ?? '';
-
-                      // Typing indicator
-                      if (isTyping) {
-                        return _buildTypingIndicator();
-                      }
-
-                      // Loading indicator
-                      if (isLoading) {
-                        return _buildLoadingMessage();
-                      }
-
-                      return _buildMessageBubble(
-                        text: text,
-                        isUser: isUser,
-                        timestamp: timestamp,
-                      );
+                      final msg = _messages[index];
+                      return _buildMessageBubble(msg);
                     },
                   ),
           ),
-          // Input Bar
+
+          // Modern Input Bar
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.all(16)
+                .copyWith(bottom: MediaQuery.of(context).padding.bottom + 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade300),
-              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, -2),
-                ),
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5))
               ],
             ),
             child: Row(
@@ -413,209 +298,30 @@ class _AiChatPageState extends State<AiChatPage> {
                     controller: _messageController,
                     decoration: InputDecoration(
                       hintText: 'Ask about your finances...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
                       filled: true,
                       fillColor: Colors.grey.shade100,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
+                          horizontal: 20, vertical: 14),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                          borderSide: BorderSide.none),
                     ),
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
-                    maxLines: 1,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: Colors.indigo,
-                  radius: 24,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: _sendMessage,
-                    padding: EdgeInsets.zero,
-                    tooltip: 'Send message',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Message Bubble Widget
-  Widget _buildMessageBubble({
-    required String text,
-    required bool isUser,
-    required String timestamp,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isUser) _buildAvatar(),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isUser ? Colors.indigo : Colors.grey.shade100,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(isUser ? 16 : 4),
-                  topRight: Radius.circular(isUser ? 4 : 16),
-                  bottomLeft: const Radius.circular(16),
-                  bottomRight: const Radius.circular(16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SelectableText(
-                    text,
-                    style: TextStyle(
-                      color: isUser ? Colors.white : Colors.black87,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
-                  if (timestamp.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _formatTimestamp(timestamp),
-                      style: TextStyle(
-                        color: isUser ? Colors.white70 : Colors.grey.shade600,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (isUser) const SizedBox(width: 8),
-          if (isUser) _buildUserAvatar(),
-        ],
-      ),
-    );
-  }
-
-  // AI Avatar
-  Widget _buildAvatar() {
-    return const CircleAvatar(
-      backgroundColor: Colors.indigo,
-      radius: 18,
-      child: Icon(
-        Icons.auto_awesome,
-        color: Colors.white,
-        size: 18,
-      ),
-    );
-  }
-
-  // User Avatar
-  Widget _buildUserAvatar() {
-    return CircleAvatar(
-      backgroundColor: Colors.grey.shade300,
-      radius: 18,
-      child: const Icon(
-        Icons.person,
-        color: Colors.grey,
-        size: 18,
-      ),
-    );
-  }
-
-  // Typing Indicator
-  Widget _buildTypingIndicator() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          _buildAvatar(),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDot(0),
-                const SizedBox(width: 4),
-                _buildDot(1),
-                const SizedBox(width: 4),
-                _buildDot(2),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDot(int index) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOut,
-      height: 8,
-      width: 8,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade600,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-
-  // Loading Message
-  Widget _buildLoadingMessage() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          _buildAvatar(),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Analyzing...',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 14,
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient:
+                        LinearGradient(colors: [Colors.indigo, Colors.purple]),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
                   ),
                 ),
               ],
@@ -626,10 +332,127 @@ class _AiChatPageState extends State<AiChatPage> {
     );
   }
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  Widget _buildMessageBubble(Map<String, dynamic> msg) {
+    final isUser = msg['isUser'] ?? false;
+    final isTyping = msg['isTyping'] ?? false;
+    final String displayText = msg['text'] ?? '';
+    final String timestamp = msg['timestamp'] ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            const CircleAvatar(
+              backgroundColor: Colors.indigo,
+              radius: 16,
+              child: Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isUser ? Colors.indigo : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2)),
+                ],
+              ),
+              child: isTyping
+                  ? _buildTypingDots()
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        isUser
+                            ? SelectableText(
+                                // 🚀 Makes user text copyable
+                                displayText,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    height: 1.5),
+                              )
+                            : MarkdownBody(
+                                data: displayText,
+                                selectable:
+                                    true, // 🚀 Makes AI markdown text copyable
+                                styleSheet: MarkdownStyleSheet(
+                                  p: const TextStyle(
+                                      color: Colors.black87,
+                                      fontSize: 15,
+                                      height: 1.5),
+                                  h1: const TextStyle(
+                                      color: Colors.indigo,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold),
+                                  h2: const TextStyle(
+                                      color: Colors.indigo,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                  h3: const TextStyle(
+                                      color: Colors.indigo,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                  listBullet: const TextStyle(
+                                      color: Colors.indigo, fontSize: 15),
+                                ),
+                              ),
+                        if (timestamp.isNotEmpty && !isTyping) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _formatTimestamp(
+                                timestamp), // 🚀 Shows timestamp under message
+                            style: TextStyle(
+                              color: isUser
+                                  ? Colors.white70
+                                  : Colors.grey.shade500,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              backgroundColor: Colors.grey.shade300,
+              radius: 16,
+              child: const Icon(Icons.person, color: Colors.white, size: 16),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingDots() {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+            height: 10,
+            width: 10,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+        SizedBox(width: 10),
+        Text('AI is thinking...',
+            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+      ],
+    );
   }
 }

@@ -29,3 +29,24 @@ exports.markAsRead = async (req, res) => {
         res.status(500).json({ message: "Error updating notification" });
     }
 };
+
+// 🚀 New: Delete Notification
+exports.deleteNotification = async (req, res) => {
+    try {
+        const notificationId = req.params.id;
+        const userId = req.user.id;
+
+        const notification = await Notification.findOne({ _id: notificationId, userId: userId });
+
+        if (!notification) {
+            return res.status(404).json({ message: "Notification not found or unauthorized" });
+        }
+
+        await Notification.findByIdAndDelete(notificationId);
+
+        res.status(200).json({ message: "Notification deleted successfully" });
+    } catch (error) {
+        console.error('Delete Notification Error:', error.message);
+        res.status(500).json({ message: "Error deleting notification" });
+    }
+};

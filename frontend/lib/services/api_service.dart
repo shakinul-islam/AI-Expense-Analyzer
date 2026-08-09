@@ -7,27 +7,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   // ===== DYNAMIC BASE URL =====
   static String get baseUrl {
-    // ১. Production (Render/Vercel) - অ্যাপ যখন রিলিজ বা লাইভ করবে
     if (kReleaseMode) {
-      // প্রোডাকশনে যাওয়ার সময় এখানে তোমার Vercel/Render-এর আসল লাইভ লিংকটি বসিয়ে দেবে
       return "https://your-live-api-url.onrender.com/api";
     }
 
-    // ২. Web (Browser)
     if (kIsWeb) {
       return "http://localhost:5000/api";
     }
 
-    // ৩. Android Emulator
     try {
       if (Platform.isAndroid) {
         return "http://10.0.2.2:5000/api";
       }
     } catch (e) {
-      // Platform check on unsupported devices will fallback below
+      // Fallback
     }
 
-    // ৪. Physical Device / Real Mobile (ওয়াইফাই দিয়ে কানেক্ট করলে) বা iOS
     return "http://192.168.0.102:5000/api";
   }
 
@@ -60,16 +55,11 @@ class ApiService {
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/auth/login');
-      print('📤 Login request to: $url');
-
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
-
-      print('📥 Login response: ${response.statusCode}');
-      print('📥 Login body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -82,7 +72,6 @@ class ApiService {
         throw Exception(error['message'] ?? 'Login failed');
       }
     } catch (e) {
-      print('❌ Login error: $e');
       throw Exception(
           'Cannot connect to server. Make sure backend is running.');
     }
@@ -92,9 +81,6 @@ class ApiService {
       String name, String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
-      print('📤 Register request to: $url');
-      print('📤 Data: name=$name, email=$email');
-
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -104,9 +90,6 @@ class ApiService {
           'password': password,
         }),
       );
-
-      print('📥 Register response: ${response.statusCode}');
-      print('📥 Register body: ${response.body}');
 
       if (response.statusCode == 201) {
         return jsonDecode(response.body);
@@ -121,7 +104,6 @@ class ApiService {
         throw Exception(errorMessage);
       }
     } catch (e) {
-      print('❌ Register error: $e');
       throw Exception(
           'Cannot connect to server. Make sure backend is running.');
     }
@@ -138,11 +120,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions');
-
-      final response = await http.get(
-        url,
-        headers: headers,
-      );
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -150,7 +128,6 @@ class ApiService {
         throw Exception('Failed to load transactions');
       }
     } catch (e) {
-      print('❌ Get transactions error: $e');
       throw Exception('Cannot connect to server');
     }
   }
@@ -159,12 +136,8 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions');
-
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode(data),
-      );
+      final response =
+          await http.post(url, headers: headers, body: jsonEncode(data));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -173,32 +146,24 @@ class ApiService {
         throw Exception(error['message'] ?? 'Failed to add transaction');
       }
     } catch (e) {
-      print('❌ Add transaction error: $e');
       throw Exception('Cannot connect to server');
     }
   }
 
-  // Map-এর জায়গায় List<dynamic> হবে
   Future<List<dynamic>> getSummary() async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions/summary');
-
-      final response = await http.get(
-        url,
-        headers: headers,
-      );
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // {} এর বদলে [] হবে
         return data['data'] ?? [];
       } else {
         throw Exception('Failed to load summary');
       }
     } catch (e) {
-      print('❌ Get summary error: $e');
-      return []; // {} এর বদলে [] হবে
+      return [];
     }
   }
 
@@ -207,11 +172,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/user/profile');
-
-      final response = await http.get(
-        url,
-        headers: headers,
-      );
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -219,7 +180,6 @@ class ApiService {
         throw Exception('Failed to load profile');
       }
     } catch (e) {
-      print('❌ Get profile error: $e');
       throw Exception('Cannot connect to server');
     }
   }
@@ -228,12 +188,8 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/user/profile');
-
-      final response = await http.put(
-        url,
-        headers: headers,
-        body: jsonEncode(data),
-      );
+      final response =
+          await http.put(url, headers: headers, body: jsonEncode(data));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -241,7 +197,6 @@ class ApiService {
         throw Exception('Failed to update profile');
       }
     } catch (e) {
-      print('❌ Update profile error: $e');
       throw Exception('Cannot connect to server');
     }
   }
@@ -251,11 +206,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications');
-
-      final response = await http.get(
-        url,
-        headers: headers,
-      );
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -263,7 +214,6 @@ class ApiService {
         throw Exception('Failed to load notifications');
       }
     } catch (e) {
-      print('❌ Get notifications error: $e');
       return [];
     }
   }
@@ -272,11 +222,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications/$id/read');
-
-      final response = await http.put(
-        url,
-        headers: headers,
-      );
+      final response = await http.put(url, headers: headers);
 
       if (response.statusCode != 200) {
         throw Exception('Failed to mark notification as read');
@@ -286,16 +232,27 @@ class ApiService {
     }
   }
 
+  // 🚀 New: Delete Notification
+  Future<void> deleteNotification(String id) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse('$baseUrl/notifications/$id');
+      final response = await http.delete(url, headers: headers);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to delete notification');
+      }
+    } catch (e) {
+      print('❌ Delete notification error: $e');
+    }
+  }
+
   // ===== AI =====
   Future<Map<String, dynamic>> generateInsight() async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/generate');
-
-      final response = await http.post(
-        url,
-        headers: headers,
-      );
+      final response = await http.post(url, headers: headers);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -304,7 +261,6 @@ class ApiService {
         throw Exception(error['message'] ?? 'Failed to generate insight');
       }
     } catch (e) {
-      print('❌ Generate insight error: $e');
       throw Exception('Cannot connect to server');
     }
   }
@@ -313,11 +269,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/reports');
-
-      final response = await http.get(
-        url,
-        headers: headers,
-      );
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -325,7 +277,6 @@ class ApiService {
         throw Exception('Failed to load AI reports');
       }
     } catch (e) {
-      print('❌ Get AI reports error: $e');
       return [];
     }
   }
@@ -334,12 +285,8 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/classify');
-
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode({'description': description}),
-      );
+      final response = await http.post(url,
+          headers: headers, body: jsonEncode({'description': description}));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -347,8 +294,44 @@ class ApiService {
       }
       return 'Other';
     } catch (e) {
-      print('❌ Classification error: $e');
       return 'Other';
+    }
+  }
+
+  // Interactive AI Chat
+  Future<String> chatWithAI(String query) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse('$baseUrl/ai/chat');
+      final response = await http.post(url,
+          headers: headers, body: jsonEncode({'query': query}));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['answer'] ?? 'Sorry, no response received.';
+      } else {
+        throw Exception('Failed to get AI response');
+      }
+    } catch (e) {
+      throw Exception('Cannot connect to server');
+    }
+  }
+
+  // Smart Text to Expense Extraction
+  Future<Map<String, dynamic>?> extractExpense(String text) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse('$baseUrl/ai/extract');
+      final response = await http.post(url,
+          headers: headers, body: jsonEncode({'text': text}));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data']; // Returns { amount, category, description }
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }

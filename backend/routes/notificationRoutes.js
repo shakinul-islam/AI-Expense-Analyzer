@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { getNotifications, markAsRead } = require('../controllers/notificationController');
+const { getNotifications, markAsRead, deleteNotification } = require('../controllers/notificationController');
 const auth = require('../middleware/authMiddleware');
 
 router.get('/', auth, getNotifications);
 router.put('/:id/read', auth, markAsRead);
+// 🚀 New Delete Route Added
+router.delete('/:id', auth, deleteNotification);
 
 module.exports = router;
