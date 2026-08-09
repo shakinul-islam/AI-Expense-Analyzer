@@ -15,6 +15,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   String _selectedType = 'Expense';
   String _selectedCategory = 'Food';
   bool _isLoading = false;
+  bool _isClassifying = false;
 
   final List<String> _categories = [
     'Food',
@@ -55,6 +56,36 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     'Other': Colors.grey,
   };
 
+  void _autoClassifyCategory() async {
+    final text = _descriptionController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter a description first!'),
+            backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isClassifying = true);
+
+    final predictedCategory = await ApiService().autoClassify(text);
+
+    if (mounted) {
+      setState(() {
+        _isClassifying = false;
+        _selectedCategory = predictedCategory;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✨ AI selected: $predictedCategory'),
+          backgroundColor: Colors.indigo,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _submitTransaction() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -65,7 +96,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           'category': _selectedCategory,
           'description': _descriptionController.text.trim(),
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -190,7 +221,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 setState(() => _selectedType = 'Expense');
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                                 decoration: BoxDecoration(
                                   color: _selectedType == 'Expense'
                                       ? Colors.red
@@ -228,7 +260,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 setState(() => _selectedType = 'Income');
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                                 decoration: BoxDecoration(
                                   color: _selectedType == 'Income'
                                       ? Colors.green
@@ -268,11 +301,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     // Amount
                     TextFormField(
                       controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         labelText: 'Amount',
                         hintText: 'Enter amount',
-                        prefixIcon: const Icon(Icons.currency_rupee, color: Colors.indigo),
+                        prefixIcon: const Icon(Icons.currency_rupee,
+                            color: Colors.indigo),
                         prefixText: '৳ ',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -284,7 +319,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                          borderSide:
+                              const BorderSide(color: Colors.indigo, width: 2),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -326,7 +362,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       child: GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           crossAxisSpacing: 8,
                           mainAxisSpacing: 8,
@@ -337,18 +374,22 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         itemBuilder: (context, index) {
                           final category = _categories[index];
                           final isSelected = _selectedCategory == category;
-                          final color = _categoryColors[category] ?? Colors.grey;
-                          
+                          final color =
+                              _categoryColors[category] ?? Colors.grey;
+
                           return GestureDetector(
                             onTap: () {
                               setState(() => _selectedCategory = category);
                             },
                             child: Container(
                               decoration: BoxDecoration(
-                                color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade50,
+                                color: isSelected
+                                    ? color.withOpacity(0.2)
+                                    : Colors.grey.shade50,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: isSelected ? color : Colors.grey.shade300,
+                                  color:
+                                      isSelected ? color : Colors.grey.shade300,
                                   width: isSelected ? 2 : 1,
                                 ),
                               ),
@@ -357,7 +398,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 children: [
                                   Icon(
                                     _categoryIcons[category] ?? Icons.category,
-                                    color: isSelected ? color : Colors.grey.shade600,
+                                    color: isSelected
+                                        ? color
+                                        : Colors.grey.shade600,
                                     size: 24,
                                   ),
                                   const SizedBox(height: 4),
@@ -365,8 +408,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                     category,
                                     style: TextStyle(
                                       fontSize: 11,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      color: isSelected ? color : Colors.grey.shade700,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isSelected
+                                          ? color
+                                          : Colors.grey.shade700,
                                     ),
                                   ),
                                 ],
@@ -385,7 +432,23 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       decoration: InputDecoration(
                         labelText: 'Description (Optional)',
                         hintText: 'Enter transaction description',
-                        prefixIcon: const Icon(Icons.description, color: Colors.indigo),
+                        prefixIcon:
+                            const Icon(Icons.description, color: Colors.indigo),
+                        // 👇 Suffix Icon for Auto-Classification 👇
+                        suffixIcon: IconButton(
+                          icon: _isClassifying
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.auto_awesome,
+                                  color: Colors.amber),
+                          onPressed:
+                              _isClassifying ? null : _autoClassifyCategory,
+                          tooltip: 'Auto-detect category',
+                        ),
+                        // 👆 -------------------- 👆
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -396,7 +459,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                          borderSide:
+                              const BorderSide(color: Colors.indigo, width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.grey.shade50,
@@ -425,12 +489,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : Row(
+                            : const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.check_circle, color: Colors.white),
-                                  const SizedBox(width: 10),
-                                  const Text(
+                                  Icon(Icons.check_circle, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Text(
                                     'Add Transaction',
                                     style: TextStyle(
                                       fontSize: 18,

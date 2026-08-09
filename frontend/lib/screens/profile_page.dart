@@ -10,6 +10,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic> _userData = {};
+  List<dynamic> _transactions = []; // Added to fetch transactions
   bool _isLoading = true;
   bool _isEditing = false;
   final _nameController = TextEditingController();
@@ -17,30 +18,53 @@ class _ProfilePageState extends State<ProfilePage> {
   final _savingsGoalController = TextEditingController();
   String _selectedCurrency = 'BDT';
 
-  final List<String> _currencies = ['BDT', 'USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'JPY'];
+  // Computed values
+  double _totalIncome = 0.0;
+  double _totalExpenses = 0.0;
+
+  final List<String> _currencies = [
+    'BDT',
+    'USD',
+    'EUR',
+    'GBP',
+    'INR',
+    'CAD',
+    'AUD',
+    'JPY'
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _loadProfileData();
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
     try {
-      final data = await ApiService().getProfile();
+      // Fetch both profile and transactions concurrently
+      final responses = await Future.wait([
+        ApiService().getProfile(),
+        ApiService().getTransactions(),
+      ]);
+
+      final profileData = responses[0] as Map<String, dynamic>;
+      final transactionsData = responses[1] as List<dynamic>;
+
+      _calculateTotals(transactionsData);
+
       setState(() {
-        _userData = data;
-        _nameController.text = data['name'] ?? '';
-        _currencyController.text = data['currency'] ?? 'BDT';
-        _selectedCurrency = data['currency'] ?? 'BDT';
-        _savingsGoalController.text = (data['savingsGoal'] ?? 0).toString();
+        _userData = profileData;
+        _transactions = transactionsData;
+        _nameController.text = profileData['name'] ?? '';
+        _currencyController.text = profileData['currency'] ?? 'BDT';
+        _selectedCurrency = profileData['currency'] ?? 'BDT';
+        _savingsGoalController.text =
+            (profileData['savingsGoal'] ?? 0).toString();
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -50,6 +74,23 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  void _calculateTotals(List<dynamic> transactions) {
+    double income = 0;
+    double expenses = 0;
+
+    for (var tx in transactions) {
+      final amount = (tx['amount'] ?? 0).toDouble();
+      if (tx['type'] == 'Income') {
+        income += amount;
+      } else if (tx['type'] == 'Expense') {
+        expenses += amount;
+      }
+    }
+
+    _totalIncome = income;
+    _totalExpenses = expenses;
   }
 
   Future<void> _updateProfile() async {
@@ -70,7 +111,7 @@ class _ProfilePageState extends State<ProfilePage> {
         'currency': _selectedCurrency,
         'savings_goal': double.tryParse(_savingsGoalController.text) ?? 0,
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -81,9 +122,8 @@ class _ProfilePageState extends State<ProfilePage> {
         );
         setState(() {
           _isEditing = false;
-          _isLoading = false;
         });
-        _loadProfile();
+        await _loadProfileData(); // Reload to get updated data
       }
     } catch (e) {
       if (mounted) {
@@ -188,8 +228,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     // Profile Avatar with Gradient
                     Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
                           colors: [Colors.indigo, Colors.purple],
                         ),
                         shape: BoxShape.circle,
@@ -233,7 +273,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Total Income',
-                            '৳${_userData['totalIncome']?.toStringAsFixed(2) ?? '0.00'}',
+                            '${_userData['currency'] ?? '৳'} ${_totalIncome.toStringAsFixed(2)}',
                             Colors.green,
                             Icons.trending_up,
                           ),
@@ -242,7 +282,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Total Expenses',
-                            '৳${_userData['totalExpenses']?.toStringAsFixed(2) ?? '0.00'}',
+                            '${_userData['currency'] ?? '৳'} ${_totalExpenses.toStringAsFixed(2)}',
                             Colors.red,
                             Icons.trending_down,
                           ),
@@ -255,7 +295,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Transactions',
-                            _userData['totalTransactions']?.toString() ?? '0',
+                            _transactions.length.toString(),
                             Colors.blue,
                             Icons.receipt_long,
                           ),
@@ -264,7 +304,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Savings Goal',
-                            '৳${_userData['savingsGoal']?.toStringAsFixed(2) ?? '0.00'}',
+                            '${_userData['currency'] ?? '৳'} ${(_userData['savingsGoal'] ?? 0).toStringAsFixed(2)}',
                             Colors.orange,
                             Icons.savings,
                           ),
@@ -287,7 +327,8 @@ class _ProfilePageState extends State<ProfilePage> {
                           children: [
                             const Row(
                               children: [
-                                Icon(Icons.person_outline, color: Colors.indigo),
+                                Icon(Icons.person_outline,
+                                    color: Colors.indigo),
                                 SizedBox(width: 8),
                                 Text(
                                   'Personal Information',
@@ -368,7 +409,8 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(
+      String title, String value, Color color, IconData icon) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -541,7 +583,20 @@ class _ProfilePageState extends State<ProfilePage> {
   String _formatDate(dynamic dateString) {
     try {
       final date = DateTime.parse(dateString);
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       return '${months[date.month - 1]} ${date.year}';
     } catch (e) {
       return 'N/A';

@@ -1,11 +1,36 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // ===== YOUR IP ADDRESS =====
-  static const String baseUrl = "http://192.168.0.102:5000/api";
-  
+  // ===== DYNAMIC BASE URL =====
+  static String get baseUrl {
+    // ১. Production (Render/Vercel) - অ্যাপ যখন রিলিজ বা লাইভ করবে
+    if (kReleaseMode) {
+      // প্রোডাকশনে যাওয়ার সময় এখানে তোমার Vercel/Render-এর আসল লাইভ লিংকটি বসিয়ে দেবে
+      return "https://your-live-api-url.onrender.com/api";
+    }
+
+    // ২. Web (Browser)
+    if (kIsWeb) {
+      return "http://localhost:5000/api";
+    }
+
+    // ৩. Android Emulator
+    try {
+      if (Platform.isAndroid) {
+        return "http://10.0.2.2:5000/api";
+      }
+    } catch (e) {
+      // Platform check on unsupported devices will fallback below
+    }
+
+    // ৪. Physical Device / Real Mobile (ওয়াইফাই দিয়ে কানেক্ট করলে) বা iOS
+    return "http://192.168.0.102:5000/api";
+  }
+
   static String? _token;
 
   // ===== TOKEN MANAGEMENT =====
@@ -36,7 +61,7 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl/auth/login');
       print('📤 Login request to: $url');
-      
+
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -58,16 +83,18 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Login error: $e');
-      throw Exception('Cannot connect to server. Make sure backend is running.');
+      throw Exception(
+          'Cannot connect to server. Make sure backend is running.');
     }
   }
 
-  Future<Map<String, dynamic>> register(String name, String email, String password) async {
+  Future<Map<String, dynamic>> register(
+      String name, String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
       print('📤 Register request to: $url');
       print('📤 Data: name=$name, email=$email');
-      
+
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -77,10 +104,10 @@ class ApiService {
           'password': password,
         }),
       );
-      
+
       print('📥 Register response: ${response.statusCode}');
       print('📥 Register body: ${response.body}');
-      
+
       if (response.statusCode == 201) {
         return jsonDecode(response.body);
       } else {
@@ -95,7 +122,8 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Register error: $e');
-      throw Exception('Cannot connect to server. Make sure backend is running.');
+      throw Exception(
+          'Cannot connect to server. Make sure backend is running.');
     }
   }
 
@@ -110,7 +138,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions');
-      
+
       final response = await http.get(
         url,
         headers: headers,
@@ -131,7 +159,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions');
-      
+
       final response = await http.post(
         url,
         headers: headers,
@@ -150,11 +178,12 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getSummary() async {
+  // Map-এর জায়গায় List<dynamic> হবে
+  Future<List<dynamic>> getSummary() async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/transactions/summary');
-      
+
       final response = await http.get(
         url,
         headers: headers,
@@ -162,13 +191,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'] ?? {};
+        // {} এর বদলে [] হবে
+        return data['data'] ?? [];
       } else {
         throw Exception('Failed to load summary');
       }
     } catch (e) {
       print('❌ Get summary error: $e');
-      return {};
+      return []; // {} এর বদলে [] হবে
     }
   }
 
@@ -177,7 +207,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/user/profile');
-      
+
       final response = await http.get(
         url,
         headers: headers,
@@ -198,7 +228,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/user/profile');
-      
+
       final response = await http.put(
         url,
         headers: headers,
@@ -221,7 +251,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications');
-      
+
       final response = await http.get(
         url,
         headers: headers,
@@ -242,7 +272,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications/$id/read');
-      
+
       final response = await http.put(
         url,
         headers: headers,
@@ -261,7 +291,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/generate');
-      
+
       final response = await http.post(
         url,
         headers: headers,
@@ -283,7 +313,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/reports');
-      
+
       final response = await http.get(
         url,
         headers: headers,
@@ -297,6 +327,28 @@ class ApiService {
     } catch (e) {
       print('❌ Get AI reports error: $e');
       return [];
+    }
+  }
+
+  Future<String> autoClassify(String description) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse('$baseUrl/ai/classify');
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode({'description': description}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['category'] ?? 'Other';
+      }
+      return 'Other';
+    } catch (e) {
+      print('❌ Classification error: $e');
+      return 'Other';
     }
   }
 }

@@ -23,7 +23,7 @@ dependencies:
   provider: ^6.1.5+1
   
   # Charts & Graphs
-  fl_chart: ^0.63.0
+  fl_chart: ^1.2.0
   
   # SVG Support
   flutter_svg: ^2.3.0
