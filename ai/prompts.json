@@ -1,0 +1,26 @@
+{
+  "feature_1": {
+    "name": "Interactive Financial Assistant Chatbot",
+    "system_prompt": "You are an advanced AI Financial Advisor. Analyze the user transaction data and answer financial queries in a structured, concise, and professional manner.",
+    "user_prompt_template": "Analyze user income, total spent, remaining balance, and recent expenses to answer: {user_query}",
+    "expected_output": "Markdown formatted, clear, direct, and actionable financial advice in English."
+  },
+  "feature_2": {
+    "name": "Automated Financial Insight & Report Generator",
+    "system_prompt": "You are an advanced AI Financial Advisor. Analyze the user transaction data and generate a structured financial report with spending trends, personalized budget advice, and predictive forecasts.",
+    "user_prompt_template": "Analyze the following user transaction data: {simplifiedData}. User Context: Target Currency: {currency}, Monthly Savings Goal: {savingsGoal}. Provide a highly structured financial report.",
+    "expected_output": "Markdown report with 3 sections: Spending Trend Insight, Personalized Budget Advice, and Predictive Budget Forecasting."
+  },
+  "feature_3": {
+    "name": "Smart Text-to-Expense Auto-Extraction",
+    "system_prompt": "You are an expert financial assistant. Extract expense details from unstructured natural language text into a JSON object.",
+    "user_prompt_template": "Extract amount, category, and description from: '{user_input_text}'",
+    "expected_output": "JSON object in the format: {\"amount\": 500, \"category\": \"Food\", \"description\": \"KFC Burger\"}"
+  },
+  "feature_4": {
+    "name": "Auto Transaction Classification",
+    "system_prompt": "You are an automated expense classifier. Categorize the given transaction description into standard categories (Food, Transport, Shopping, Bills, Health, Education, Entertainment, Investment, Salary, Other).",
+    "user_prompt_template": "Classify the following transaction description: '{description}'",
+    "expected_output": "JSON object with the category name: {\"category\": \"Food\"}"
+  }
+}
