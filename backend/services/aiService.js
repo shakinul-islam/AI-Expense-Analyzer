@@ -4,31 +4,10 @@ require('dotenv').config();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 let groq = null;
-let primaryModel = "";
-let fastModel = "";
-
 if (GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')) {
     try {
         groq = new Groq({ apiKey: GROQ_API_KEY });
         console.log('✅ Groq AI Service initialized successfully');
-        
-        // 🚀 DYNAMIC MODEL FETCHING: আপনার API Key-তে কোন মডেলগুলো এভেইলেবল সেটা চেক করা হচ্ছে
-        groq.models.list().then(response => {
-            const availableModels = response.data.map(m => m.id);
-            console.log('✅ Authorized Models for your API Key:', availableModels.join(', '));
-            
-            // ভারী কাজের জন্য (Insight & Classification) 70b মডেল বা প্রথম এভেইলেবল মডেলটি খুঁজবে
-            primaryModel = availableModels.find(m => m.includes('70b') || m.includes('versatile') || m.includes('llama3')) || availableModels[0];
-            
-            // দ্রুত কাজের জন্য (Chat & Extraction) 8b মডেল বা অন্য এভেইলেবল মডেল খুঁজবে
-            fastModel = availableModels.find(m => m.includes('8b') || m.includes('instant') || m.includes('gemma')) || availableModels[0];
-            
-            console.log(`🚀 Auto-Selected Primary Model: ${primaryModel}`);
-            console.log(`🚀 Auto-Selected Fast Model: ${fastModel}`);
-        }).catch(err => {
-            console.error('⚠️ Could not fetch models dynamically:', err.message);
-        });
-
     } catch (error) {
         console.error('❌ Failed to initialize Groq:', error.message);
     }
@@ -36,11 +15,36 @@ if (GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')) {
     console.log('⚠️ Groq API key not found or invalid. AI features will use fallback mode.');
 }
 
-// Helper Function: সঠিক মডেলটি কল করার জন্য
-const getModel = (type) => {
-    if (type === 'heavy' && primaryModel) return primaryModel;
-    if (type === 'fast' && fastModel) return fastModel;
-    return 'llama3-8b-8192'; // Ultimate Fallback
+// 🚀 Cache to store dynamically fetched authorized models
+let availableModelsCache = [];
+
+// 🚀 Smart Asynchronous Function to get the EXACT available model
+const getModelName = async (type) => {
+    if (!groq) return "llama3-8b-8192"; // Fallback if groq is null
+
+    // If we haven't fetched the models yet, fetch them now!
+    if (availableModelsCache.length === 0) {
+        try {
+            const response = await groq.models.list();
+            // Filter out experimental, audio, vision, or terms-restricted models
+            availableModelsCache = response.data
+                .map(m => m.id)
+                .filter(m => !m.includes('canopylabs') && !m.includes('whisper') && !m.includes('llava'));
+            
+            console.log('✅ Fetched Authorized Models:', availableModelsCache.join(', '));
+        } catch (error) {
+            console.error('⚠️ Could not fetch models dynamically:', error.message);
+            // Ultimate safe fallback if fetching fails
+            availableModelsCache = ['llama3-8b-8192'];
+        }
+    }
+
+    // Dynamically select the best model based on what is ACTUALLY available
+    if (type === 'heavy') {
+        return availableModelsCache.find(m => m.includes('70b') || m.includes('versatile')) || availableModelsCache[0];
+    } else {
+        return availableModelsCache.find(m => m.includes('8b') || m.includes('instant') || m.includes('gemma') || m.includes('mixtral')) || availableModelsCache[0];
+    }
 };
 
 // 1. Generate Insight (FR-05, FR-06, FR-09)
@@ -72,9 +76,11 @@ const getExpenseInsight = async (transactions, userProfile = {}) => {
         * **[Category 3]:** [Amount] ${currency}
         `;
 
+        const modelToUse = await getModelName('heavy'); // 🚀 Awaits the valid model
+        
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
-            model: getModel('heavy'), // 🚀 Auto-selected model
+            model: modelToUse, 
             temperature: 0.5,
             max_tokens: 600,
         });
@@ -94,9 +100,11 @@ const autoClassifyTransaction = async (description) => {
         const prompt = `Classify this expense into exactly ONE category: Food, Transport, Shopping, Entertainment, Bills, Health, Education, Salary, Investment, Other. 
         Description: "${description}". Reply ONLY with the category name.`;
 
+        const modelToUse = await getModelName('heavy'); // 🚀 Awaits the valid model
+
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
-            model: getModel('heavy'), // 🚀 Auto-selected model
+            model: modelToUse,
             temperature: 0.1,
             max_tokens: 10,
         });
@@ -127,9 +135,11 @@ const askFinancialAssistant = async (query, contextData) => {
         Answer the user's question clearly and directly in English. Do not show unnecessary calculation steps. Give a clean, professional answer based on the numbers provided.
         `;
 
+        const modelToUse = await getModelName('fast'); // 🚀 Awaits the valid model
+
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
-            model: getModel('fast'), // 🚀 Auto-selected model
+            model: modelToUse,
             temperature: 0.5,
             max_tokens: 300,
         });
@@ -159,9 +169,11 @@ const extractExpenseDetails = async (text) => {
         }
         `;
 
+        const modelToUse = await getModelName('fast'); // 🚀 Awaits the valid model
+
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
-            model: getModel('fast'), // 🚀 Auto-selected model
+            model: modelToUse,
             temperature: 0.1,
             response_format: { type: "json_object" },
         });
