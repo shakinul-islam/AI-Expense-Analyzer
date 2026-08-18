@@ -16,23 +16,56 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  // 🚀 Reusable Modern Custom Snackbar
+  void _showCustomSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor:
+            isError ? Colors.redAccent.shade700 : Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+        duration: const Duration(seconds: 4),
+        elevation: 6,
+      ),
+    );
+  }
+
   void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
         final response = await ApiService().login(
-          _emailController.text,
+          _emailController.text.trim(),
           _passwordController.text,
         );
-        
+
         if (response['token'] != null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Login successful!'),
-                backgroundColor: Colors.green,
-              ),
-            );
+            _showCustomSnackBar('Login successful! Welcome back.',
+                isError: false);
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const DashboardPage()),
@@ -41,12 +74,7 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.toString().replaceAll('Exception:', '')),
-              backgroundColor: Colors.red,
-            ),
-          );
+          _showCustomSnackBar(e.toString().replaceAll('Exception: ', ''));
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -115,7 +143,7 @@ class _LoginPageState extends State<LoginPage> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
+                            if (value == null || value.trim().isEmpty) {
                               return 'Please enter your email';
                             }
                             if (!value.contains('@') || !value.contains('.')) {
@@ -138,7 +166,8 @@ class _LoginPageState extends State<LoginPage> {
                                     : Icons.visibility_off,
                               ),
                               onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
+                                setState(
+                                    () => _obscurePassword = !_obscurePassword);
                               },
                             ),
                             border: const OutlineInputBorder(),
