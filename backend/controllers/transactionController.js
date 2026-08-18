@@ -30,7 +30,7 @@ exports.addTransaction = async (req, res) => {
         });
 
         // ==========================================
-        // 🚀 SMART PROACTIVE BUDGET ALERT LOGIC
+        // 🚀 DYNAMIC BUDGET ALERT LOGIC
         // ==========================================
         if (type === 'Expense') {
             const currentDate = new Date();
@@ -41,10 +41,11 @@ exports.addTransaction = async (req, res) => {
             const budget = await Budget.findOne({ userId, month: currentMonth, year: currentYear })
                            || await Budget.findOne({ userId }).sort({ createdAt: -1 });
 
+            // Ensure budget exists and is greater than 0
             if (budget && budget.monthly_limit > 0) {
-                // Get start and end of the current month
                 const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
                 const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59);
+                const budgetLimit = budget.monthly_limit;
 
                 // Calculate total spent THIS month
                 const totalSpentAgg = await Transaction.aggregate([
@@ -57,44 +58,29 @@ exports.addTransaction = async (req, res) => {
                 ]);
 
                 const currentTotal = totalSpentAgg[0]?.total || 0;
-                const budgetLimit = budget.monthly_limit;
+                
+                // Calculate percentages dynamically
+                const spentPercentage = currentTotal / budgetLimit;
+                const spentPercentageDisplay = (spentPercentage * 100).toFixed(0);
+                const remainingPercentageDisplay = ((1 - spentPercentage) * 100).toFixed(0);
 
-                // 1. Basic Budget Exceeded Alert
-                if (currentTotal > budgetLimit) {
+                // 1. Budget Exceeded Alert (100% or more) -> Notifies on EVERY expense after exceeding
+                if (spentPercentage >= 1.0) {
                     await Notification.create({
                         userId,
                         title: "🚨 Budget Exceeded!",
-                        message: `You have crossed your monthly budget of ৳${budgetLimit}. Total spent: ৳${currentTotal}.`,
+                        message: `You have spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Total spent: ৳${currentTotal}.`,
                         status: 'unread'
                     });
                 } 
-                // 2. Proactive/Predictive Warning
-                else {
-                    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-                    const currentDay = currentDate.getDate();
-                    
-                    const monthPassedPercentage = currentDay / daysInMonth;
-                    const spentPercentage = currentTotal / budgetLimit;
-
-                    // If user spent >= 80% of budget BUT month is less than 80% complete
-                    if (spentPercentage >= 0.8 && monthPassedPercentage < 0.8) {
-                        
-                        // Check if we already sent a proactive warning this month to avoid spamming
-                        const existingWarning = await Notification.findOne({
-                            userId,
-                            title: "⚠️ Proactive Budget Warning",
-                            created_at: { $gte: startOfMonth, $lte: endOfMonth }
-                        });
-
-                        if (!existingWarning) {
-                            await Notification.create({
-                                userId,
-                                title: "⚠️ Proactive Budget Warning",
-                                message: `Slow down! You've already spent ${(spentPercentage * 100).toFixed(0)}% of your budget, but only ${(monthPassedPercentage * 100).toFixed(0)}% of the month has passed.`,
-                                status: 'unread'
-                            });
-                        }
-                    }
+                // 2. Budget Warning Alert (80% to 99%) -> Notifies on EVERY expense in this range
+                else if (spentPercentage >= 0.8) {
+                    await Notification.create({
+                        userId,
+                        title: "⚠️ Budget Alert",
+                        message: `You have spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Only ${remainingPercentageDisplay}% remaining!`,
+                        status: 'unread'
+                    });
                 }
             }
         }
