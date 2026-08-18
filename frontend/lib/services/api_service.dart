@@ -61,19 +61,24 @@ class ApiService {
         body: jsonEncode({'email': email, 'password': password}),
       );
 
+      final responseData = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['token'] != null) {
-          await _saveToken(data['token']);
+        if (responseData['token'] != null) {
+          await _saveToken(responseData['token']);
         }
-        return data;
+        return responseData;
       } else {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Login failed');
+        // 🚀 Throw exact message from backend
+        throw Exception(responseData['message'] ?? 'Login failed');
       }
     } catch (e) {
+      // If it's our thrown exception, pass it down. Otherwise, generic network error.
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
       throw Exception(
-          'Cannot connect to server. Make sure backend is running.');
+          'Cannot connect to server. Please check your internet connection.');
     }
   }
 
@@ -91,21 +96,20 @@ class ApiService {
         }),
       );
 
+      final responseData = jsonDecode(response.body);
+
       if (response.statusCode == 201) {
-        return jsonDecode(response.body);
+        return responseData;
       } else {
-        String errorMessage = 'Registration failed';
-        try {
-          final error = jsonDecode(response.body);
-          errorMessage = error['message'] ?? errorMessage;
-        } catch (e) {
-          errorMessage = 'Server error (${response.statusCode})';
-        }
-        throw Exception(errorMessage);
+        // 🚀 Throw exact message from backend
+        throw Exception(responseData['message'] ?? 'Registration failed');
       }
     } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
       throw Exception(
-          'Cannot connect to server. Make sure backend is running.');
+          'Cannot connect to server. Please check your internet connection.');
     }
   }
 
@@ -232,7 +236,6 @@ class ApiService {
     }
   }
 
-  // 🚀 New: Delete Notification
   Future<void> deleteNotification(String id) async {
     try {
       final headers = await _getHeaders();
