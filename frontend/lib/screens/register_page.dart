@@ -18,33 +18,61 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
+  // 🚀 Reusable Modern Custom Snackbar
+  void _showCustomSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor:
+            isError ? Colors.redAccent.shade700 : Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+        duration: const Duration(seconds: 4),
+        elevation: 6,
+      ),
+    );
+  }
+
   void _register() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
         await ApiService().register(
-          _nameController.text,
-          _emailController.text,
+          _nameController.text.trim(),
+          _emailController.text.trim(),
           _passwordController.text,
         );
-        
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Registration successful! Please login.'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          _showCustomSnackBar('Registration successful! Please login.',
+              isError: false);
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.toString().replaceAll('Exception:', '')),
-              backgroundColor: Colors.red,
-            ),
-          );
+          _showCustomSnackBar(e.toString().replaceAll('Exception: ', ''));
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -112,10 +140,10 @@ class _RegisterPageState extends State<RegisterPage> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
+                            if (value == null || value.trim().isEmpty) {
                               return 'Please enter your name';
                             }
-                            if (value.length < 2) {
+                            if (value.trim().length < 2) {
                               return 'Name must be at least 2 characters';
                             }
                             return null;
@@ -131,11 +159,11 @@ class _RegisterPageState extends State<RegisterPage> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
+                            if (value == null || value.trim().isEmpty) {
                               return 'Please enter your email';
                             }
                             if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                .hasMatch(value)) {
+                                .hasMatch(value.trim())) {
                               return 'Please enter a valid email';
                             }
                             return null;
@@ -155,7 +183,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                     : Icons.visibility_off,
                               ),
                               onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
+                                setState(
+                                    () => _obscurePassword = !_obscurePassword);
                               },
                             ),
                             border: const OutlineInputBorder(),
