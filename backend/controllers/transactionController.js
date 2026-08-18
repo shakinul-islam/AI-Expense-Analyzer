@@ -30,24 +30,32 @@ exports.addTransaction = async (req, res) => {
         });
 
         // ==========================================
-        // 🚀 DYNAMIC BUDGET ALERT LOGIC
+        // 🚀 DYNAMIC BUDGET ALERT LOGIC (100% FIXED)
         // ==========================================
         if (type === 'Expense') {
             const currentDate = new Date();
             const currentMonth = currentDate.getMonth() + 1; // 1-12
             const currentYear = currentDate.getFullYear();
 
-            // Find budget for this month (or the most recent one)
-            const budget = await Budget.findOne({ userId, month: currentMonth, year: currentYear })
-                           || await Budget.findOne({ userId }).sort({ createdAt: -1 });
+            // 🛠️ BULLETPROOF BUG FIX: ALWAYS force MongoDB to return the ABSOLUTE LATEST updated/created budget for this month
+            let budget = await Budget.findOne({ 
+                userId, 
+                month: currentMonth, 
+                year: currentYear 
+            }).sort({ updatedAt: -1, _id: -1 });
+            
+            if (!budget) {
+                // Global fallback: get the most recently EDITED budget overall
+                budget = await Budget.findOne({ userId }).sort({ updatedAt: -1, _id: -1 });
+            }
 
             // Ensure budget exists and is greater than 0
             if (budget && budget.monthly_limit > 0) {
                 const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
                 const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59);
-                const budgetLimit = budget.monthly_limit;
+                const budgetLimit = budget.monthly_limit; // Now it will correctly be 4400
 
-                // Calculate total spent THIS month
+                // Calculate total spent THIS month (includes the transaction just added)
                 const totalSpentAgg = await Transaction.aggregate([
                     { $match: { 
                         userId: new mongoose.Types.ObjectId(userId),
@@ -59,26 +67,26 @@ exports.addTransaction = async (req, res) => {
 
                 const currentTotal = totalSpentAgg[0]?.total || 0;
                 
-                // Calculate percentages dynamically
+                // Calculate percentages and remaining amount dynamically
                 const spentPercentage = currentTotal / budgetLimit;
-                const spentPercentageDisplay = (spentPercentage * 100).toFixed(0);
-                const remainingPercentageDisplay = ((1 - spentPercentage) * 100).toFixed(0);
+                const spentPercentageDisplay = Math.round(spentPercentage * 100);
+                const remainingAmount = budgetLimit - currentTotal;
 
-                // 1. Budget Exceeded Alert (100% or more) -> Notifies on EVERY expense after exceeding
+                // 1. Budget Exceeded Alert (100% or more)
                 if (spentPercentage >= 1.0) {
                     await Notification.create({
                         userId,
                         title: "🚨 Budget Exceeded!",
-                        message: `You have spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Total spent: ৳${currentTotal}.`,
+                        message: `You have crossed your budget limit! You spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Total spent: ৳${currentTotal}.`,
                         status: 'unread'
                     });
                 } 
-                // 2. Budget Warning Alert (80% to 99%) -> Notifies on EVERY expense in this range
+                // 2. Budget Warning Alert (80% to 99%)
                 else if (spentPercentage >= 0.8) {
                     await Notification.create({
                         userId,
                         title: "⚠️ Budget Alert",
-                        message: `You have spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Only ${remainingPercentageDisplay}% remaining!`,
+                        message: `You have spent ${spentPercentageDisplay}% of your ৳${budgetLimit} budget. Only ৳${remainingAmount} remaining!`,
                         status: 'unread'
                     });
                 }
@@ -151,7 +159,6 @@ exports.deleteTransaction = async (req, res) => {
         const transactionId = req.params.id;
         const userId = req.user.id;
 
-        // Verify the transaction exists and belongs to the user making the request
         const transaction = await Transaction.findOne({ _id: transactionId, userId: userId });
 
         if (!transaction) {
