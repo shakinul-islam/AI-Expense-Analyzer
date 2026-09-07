@@ -78,7 +78,7 @@ exports.extractExpense = async (req, res) => {
 // 5. Get Previous AI Reports
 exports.getReports = async (req, res) => {
     try {
-        // Currently returns an empty array to resolve frontend calls without errors
+        
         res.status(200).json([]);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
