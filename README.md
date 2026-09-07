@@ -18,6 +18,13 @@ The AI Expense Analyzer is an advanced personal finance management application d
 * **AI-Driven Financial Analysis:** Deep-level analysis to identify spending trends, habitual overspending patterns, and generate structured, actionable financial insight reports.
 * **Smart Notification Dispatcher:** Automated, real-time alerts that notify users when they reach critical budget thresholds (e.g., 80% of the monthly limit).
 
+## Testing & Quality Assurance
+As part of our continuous integration and system validation, the application has undergone rigorous testing:
+* **API Testing:** Executed positive and negative REST endpoint validation using Thunder Client (handling JWT authorization, invalid inputs, and correct HTTP status codes).
+* **AI Resilience:** Tested Groq API integrations against normal, ambiguous, and empty strings to ensure graceful fallback responses without hallucination or system crashes.
+* **UI/UX Validation:** Verified client-side form validation, error state indicators, and responsive layouts across mobile and tablet dimensions in Flutter.
+* **Security:** Confirmed bcrypt password encryption and isolated `.env` configurations.
+
 ## Technology Stack
 * **Frontend:** Flutter, Dart
 * **Backend:** Node.js, Express.js
@@ -31,7 +38,7 @@ The AI Expense Analyzer is an advanced personal finance management application d
 ├── backend/          # Node.js + Express.js API source code
 ├── frontend/         # Flutter application source code
 ├── database/         # Database schemas and ER diagrams
-├── documentation/    # System Design PDF, SRS, and project reports
+├── documentation/    # System Design PDF, SRS, and Testing Reports (PDF)
 ├── design/           # UI/UX wireframes and User Flow diagrams
 ├── screenshots/      # App screenshots and integration proofs
 ├── README.md         # Project documentation
