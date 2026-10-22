@@ -5,30 +5,17 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // ===== DYNAMIC BASE URL =====
   static String get baseUrl {
-    if (kReleaseMode) {
-      return "https://your-live-api-url.onrender.com/api";
-    }
-
-    if (kIsWeb) {
-      return "http://localhost:5000/api";
-    }
-
+    if (kReleaseMode) return "https://your-live-api-url.onrender.com/api";
+    if (kIsWeb) return "http://localhost:5000/api";
     try {
-      if (Platform.isAndroid) {
-        return "http://10.0.2.2:5000/api";
-      }
-    } catch (e) {
-      // Fallback
-    }
-
+      if (Platform.isAndroid) return "http://10.0.2.2:5000/api";
+    } catch (_) {}
     return "http://192.168.0.102:5000/api";
   }
 
   static String? _token;
 
-  // ===== TOKEN MANAGEMENT =====
   Future<void> _saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_token', token);
@@ -51,65 +38,75 @@ class ApiService {
     };
   }
 
-  // ===== AUTHENTICATION =====
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    try {
-      final url = Uri.parse('$baseUrl/auth/login');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
-      );
-
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        if (responseData['token'] != null) {
-          await _saveToken(responseData['token']);
-        }
-        return responseData;
-      } else {
-        // 🚀 Throw exact message from backend
-        throw Exception(responseData['message'] ?? 'Login failed');
-      }
-    } catch (e) {
-      // If it's our thrown exception, pass it down. Otherwise, generic network error.
-      if (e.toString().contains('Exception:')) {
-        rethrow;
-      }
-      throw Exception(
-          'Cannot connect to server. Please check your internet connection.');
+  Future<void> _handle401(http.Response response) async {
+    if (response.statusCode == 401) {
+      await logout();
+      throw Exception('Session expired. Please login again.');
     }
   }
 
-  Future<Map<String, dynamic>> register(
-      String name, String email, String password) async {
+  // ===== AUTH =====
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/login');
+      final response = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email, 'password': password}));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        if (data['token'] != null) await _saveToken(data['token']);
+        return data;
+      }
+      throw Exception(data['message'] ?? 'Login failed');
+    } catch (e) {
+      if (e.toString().contains('Exception:')) rethrow;
+      throw Exception('Cannot connect to server.');
+    }
+  }
+
+  Future<Map<String, dynamic>> register(String name, String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'email': email,
-          'password': password,
-        }),
-      );
-
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        return responseData;
-      } else {
-        // 🚀 Throw exact message from backend
-        throw Exception(responseData['message'] ?? 'Registration failed');
-      }
+      final response = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name, 'email': email, 'password': password}));
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 201) return data;
+      throw Exception(data['message'] ?? 'Registration failed');
     } catch (e) {
-      if (e.toString().contains('Exception:')) {
-        rethrow;
-      }
-      throw Exception(
-          'Cannot connect to server. Please check your internet connection.');
+      if (e.toString().contains('Exception:')) rethrow;
+      throw Exception('Cannot connect to server.');
+    }
+  }
+
+  Future<String> forgotPassword(String email) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/forgot-password');
+      final response = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email}));
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) return data['message'] ?? 'Reset link sent';
+      throw Exception(data['message'] ?? 'Failed to send reset link');
+    } catch (e) {
+      if (e.toString().contains('Exception:')) rethrow;
+      throw Exception('Cannot connect to server.');
+    }
+  }
+
+  Future<String> resetPassword(String token, String newPassword) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/reset-password');
+      final response = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token, 'newPassword': newPassword}));
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) return data['message'] ?? 'Password reset';
+      throw Exception(data['message'] ?? 'Failed to reset password');
+    } catch (e) {
+      if (e.toString().contains('Exception:')) rethrow;
+      throw Exception('Cannot connect to server.');
     }
   }
 
@@ -121,88 +118,186 @@ class ApiService {
 
   // ===== TRANSACTIONS =====
   Future<List<dynamic>> getTransactions() async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/transactions');
-      final response = await http.get(url, headers: headers);
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/transactions');
+    final response = await http.get(url, headers: headers);
+    await _handle401(response);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['data'] is List) return data['data'];
+      if (data is List) return data;
+    }
+    throw Exception('Failed to load transactions');
+  }
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to load transactions');
-      }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
+  Future<List<dynamic>> searchTransactions({
+    String? search,
+    String? category,
+    String? type,
+    DateTime? from,
+    DateTime? to,
+    double? minAmount,
+    double? maxAmount,
+  }) async {
+    final headers = await _getHeaders();
+    final params = <String, String>{};
+    
+    if (search != null && search.trim().isNotEmpty) params['search'] = search.trim();
+    if (category != null && category.isNotEmpty) params['category'] = category;
+    if (type != null && type.isNotEmpty) params['type'] = type;
+    if (from != null) params['from'] = from.toIso8601String();
+    if (to != null) params['to'] = to.toIso8601String();
+    if (minAmount != null) params['minAmount'] = minAmount.toString();
+    if (maxAmount != null) params['maxAmount'] = maxAmount.toString();
+
+    final uri = Uri.parse('$baseUrl/transactions').replace(queryParameters: params);
+    final response = await http.get(uri, headers: headers);
+    await _handle401(response);
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['data'] is List) return data['data'];
+      if (data is List) return data;
+    }
+    throw Exception('Failed to search transactions');
+  }
+
+  Future<Map<String, dynamic>> addTransaction(Map<String, dynamic> d) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/transactions');
+    final response = await http.post(url, headers: headers, body: jsonEncode(d));
+    await _handle401(response);
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['message'] ?? 'Failed to add transaction');
+  }
+
+  Future<void> deleteTransaction(String id) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/transactions/$id');
+    final response = await http.delete(url, headers: headers);
+    await _handle401(response);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to delete transaction');
     }
   }
 
-  Future<Map<String, dynamic>> addTransaction(Map<String, dynamic> data) async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/transactions');
-      final response =
-          await http.post(url, headers: headers, body: jsonEncode(data));
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Failed to add transaction');
-      }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
+  Future<int> bulkDeleteTransactions(List<String> ids) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/transactions/bulk-delete');
+    final response = await http.post(url, headers: headers, body: jsonEncode({'ids': ids}));
+    await _handle401(response);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['deletedCount'] ?? 0;
     }
+    throw Exception('Bulk delete failed');
+  }
+
+  Future<String> exportCSV({DateTime? from, DateTime? to}) async {
+    final headers = await _getHeaders();
+    final params = <String, String>{};
+    if (from != null) params['from'] = from.toIso8601String();
+    if (to != null) params['to'] = to.toIso8601String();
+    final uri = Uri.parse('$baseUrl/transactions/export').replace(queryParameters: params);
+    final response = await http.get(uri, headers: headers);
+    await _handle401(response);
+    if (response.statusCode == 200) return response.body;
+    throw Exception('Export failed');
   }
 
   Future<List<dynamic>> getSummary() async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/transactions/summary');
-      final response = await http.get(url, headers: headers);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['data'] ?? [];
-      } else {
-        throw Exception('Failed to load summary');
-      }
-    } catch (e) {
-      return [];
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/transactions/summary');
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['data'] ?? [];
     }
+    return [];
   }
 
   // ===== USER PROFILE =====
   Future<Map<String, dynamic>> getProfile() async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/user/profile');
-      final response = await http.get(url, headers: headers);
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to load profile');
-      }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
-    }
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/user/profile');
+    final response = await http.get(url, headers: headers);
+    await _handle401(response);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to load profile');
   }
 
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/user/profile');
+    final response = await http.put(url, headers: headers, body: jsonEncode(data));
+    await _handle401(response);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception('Failed to update profile');
+  }
+
+  // ===== CUSTOM CATEGORIES =====
+  Future<List<String>> getCustomCategories() async {
     try {
       final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/user/profile');
-      final response =
-          await http.put(url, headers: headers, body: jsonEncode(data));
-
+      final url = Uri.parse('$baseUrl/user/categories');
+      final response = await http.get(url, headers: headers);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to update profile');
+        final data = jsonDecode(response.body);
+        return List<String>.from(data['customCategories'] ?? []);
       }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
+      return [];
+    } catch (_) {
+      return [];
     }
+  }
+
+  Future<List<String>> addCustomCategory(String category) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/user/categories');
+    final response = await http.post(url, headers: headers, body: jsonEncode({'category': category}));
+    await _handle401(response);
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 201) {
+      return List<String>.from(data['customCategories'] ?? []);
+    }
+    throw Exception(data['message'] ?? 'Failed to add category');
+  }
+
+  Future<List<String>> deleteCustomCategory(String category) async {
+    final headers = await _getHeaders();
+    final encoded = Uri.encodeComponent(category);
+    final url = Uri.parse('$baseUrl/user/categories/$encoded');
+    final response = await http.delete(url, headers: headers);
+    await _handle401(response);
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return List<String>.from(data['customCategories'] ?? []);
+    }
+    throw Exception(data['message'] ?? 'Failed to delete category');
+  }
+
+  // ===== BUDGET =====
+  Future<Map<String, dynamic>> setBudget(double limit, int month, int year) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/budgets');
+    final response = await http.post(url, headers: headers,
+        body: jsonEncode({'monthly_limit': limit, 'month': month, 'year': year}));
+    await _handle401(response);
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to save budget');
+  }
+
+  Future<List<dynamic>> getBudgets() async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/budgets');
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    return [];
   }
 
   // ===== NOTIFICATIONS =====
@@ -211,61 +306,36 @@ class ApiService {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications');
       final response = await http.get(url, headers: headers);
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to load notifications');
-      }
-    } catch (e) {
-      return [];
-    }
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
+    return [];
   }
 
   Future<void> markNotificationRead(String id) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications/$id/read');
-      final response = await http.put(url, headers: headers);
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to mark notification as read');
-      }
-    } catch (e) {
-      print('❌ Mark notification read error: $e');
-    }
+      await http.put(url, headers: headers);
+    } catch (_) {}
   }
 
   Future<void> deleteNotification(String id) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/notifications/$id');
-      final response = await http.delete(url, headers: headers);
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to delete notification');
-      }
-    } catch (e) {
-      print('❌ Delete notification error: $e');
-    }
+      await http.delete(url, headers: headers);
+    } catch (_) {}
   }
 
   // ===== AI =====
   Future<Map<String, dynamic>> generateInsight() async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/ai/generate');
-      final response = await http.post(url, headers: headers);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Failed to generate insight');
-      }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
-    }
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/ai/generate');
+    final response = await http.post(url, headers: headers);
+    await _handle401(response);
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 201 || response.statusCode == 200) return data;
+    throw Exception(data['message'] ?? 'Failed to generate insight');
   }
 
   Future<List<dynamic>> getAIReports() async {
@@ -273,68 +343,46 @@ class ApiService {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/reports');
       final response = await http.get(url, headers: headers);
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Failed to load AI reports');
-      }
-    } catch (e) {
-      return [];
-    }
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
+    return [];
   }
 
   Future<String> autoClassify(String description) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/classify');
-      final response = await http.post(url,
-          headers: headers, body: jsonEncode({'description': description}));
-
+      final response = await http.post(url, headers: headers, body: jsonEncode({'description': description}));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['category'] ?? 'Other';
       }
-      return 'Other';
-    } catch (e) {
-      return 'Other';
-    }
+    } catch (_) {}
+    return 'Other';
   }
 
-  // Interactive AI Chat
   Future<String> chatWithAI(String query) async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse('$baseUrl/ai/chat');
-      final response = await http.post(url,
-          headers: headers, body: jsonEncode({'query': query}));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['answer'] ?? 'Sorry, no response received.';
-      } else {
-        throw Exception('Failed to get AI response');
-      }
-    } catch (e) {
-      throw Exception('Cannot connect to server');
+    final headers = await _getHeaders();
+    final url = Uri.parse('$baseUrl/ai/chat');
+    final response = await http.post(url, headers: headers, body: jsonEncode({'query': query}));
+    await _handle401(response);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['answer'] ?? 'No response.';
     }
+    throw Exception('Failed to get AI response');
   }
 
-  // Smart Text to Expense Extraction
   Future<Map<String, dynamic>?> extractExpense(String text) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/extract');
-      final response = await http.post(url,
-          headers: headers, body: jsonEncode({'text': text}));
-
+      final response = await http.post(url, headers: headers, body: jsonEncode({'text': text}));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data']; // Returns { amount, category, description }
+        return data['data'];
       }
-      return null;
-    } catch (e) {
-      return null;
-    }
+    } catch (_) {}
+    return null;
   }
 }

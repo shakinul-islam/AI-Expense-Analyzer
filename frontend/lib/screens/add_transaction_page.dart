@@ -20,7 +20,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   bool _isClassifying = false;
   bool _isExtracting = false;
 
-  final List<String> _categories = [
+  // Selection mode for deleting custom categories
+  bool _categoryManageMode = false;
+  final Set<String> _selectedCategories = {};
+
+  final List<String> _defaultCategories = [
     'Food',
     'Transport',
     'Shopping',
@@ -32,6 +36,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     'Investment',
     'Other',
   ];
+
+  List<String> _customCategories = [];
+
+  List<String> get _allCategories =>
+      [..._defaultCategories, ..._customCategories];
 
   final Map<String, IconData> _categoryIcons = {
     'Food': Icons.restaurant,
@@ -59,6 +68,297 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     'Other': Colors.grey,
   };
 
+  final List<Color> _customPalette = [
+    Colors.pink,
+    Colors.cyan,
+    Colors.deepOrange,
+    Colors.lightBlue,
+    Colors.lime,
+    Colors.deepPurple,
+    Colors.brown,
+    Colors.blueGrey,
+  ];
+
+  IconData _iconForCategory(String category) =>
+      _categoryIcons[category] ?? Icons.category;
+
+  Color _colorForCategory(String category) {
+    if (_categoryColors.containsKey(category)) {
+      return _categoryColors[category]!;
+    }
+    final idx = category.codeUnits.fold<int>(0, (a, b) => a + b) %
+        _customPalette.length;
+    return _customPalette[idx];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomCategories();
+  }
+
+  Future<void> _loadCustomCategories() async {
+    final cats = await ApiService().getCustomCategories();
+    if (mounted) setState(() => _customCategories = cats);
+  }
+
+  // 🚀 Add custom category dialog
+  void _showAddCategoryDialog() {
+    final controller = TextEditingController();
+    final dialogFormKey = GlobalKey<FormState>();
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.add_circle_outline, color: Colors.indigo),
+              SizedBox(width: 8),
+              Text('Add Custom Category',
+                  style:
+                      TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          content: Form(
+            key: dialogFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Create your own category. It will be saved to your account.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLength: 30,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Category Name',
+                    hintText: 'e.g., Gym, Pet Care, Coffee',
+                    prefixIcon: const Icon(Icons.label_outline),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter a category name';
+                    }
+                    if (value.trim().length > 30) {
+                      return 'Max 30 characters';
+                    }
+                    final lower = value.trim().toLowerCase();
+                    if (_allCategories.any((c) => c.toLowerCase() == lower)) {
+                      return 'Category already exists';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child:
+                  const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!dialogFormKey.currentState!.validate()) return;
+                      setDialogState(() => isSaving = true);
+                      try {
+                        final updated = await ApiService()
+                            .addCustomCategory(controller.text.trim());
+                        if (mounted) {
+                          setState(() {
+                            _customCategories = updated;
+                            _selectedCategory = controller.text.trim();
+                          });
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  '✅ Category "${controller.text.trim()}" added!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  '❌ ${e.toString().replaceAll('Exception:', '')}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Add',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🚀 Toggle manage mode for categories
+  void _toggleCategoryManageMode() {
+    setState(() {
+      _categoryManageMode = !_categoryManageMode;
+      _selectedCategories.clear();
+    });
+  }
+
+  void _toggleCategorySelection(String category) {
+    setState(() {
+      if (_selectedCategories.contains(category)) {
+        _selectedCategories.remove(category);
+      } else {
+        _selectedCategories.add(category);
+      }
+    });
+  }
+
+  void _selectAllCustomCategories() {
+    setState(() {
+      if (_selectedCategories.length == _customCategories.length) {
+        _selectedCategories.clear();
+      } else {
+        _selectedCategories
+          ..clear()
+          ..addAll(_customCategories);
+      }
+    });
+  }
+
+  // 🚀 Single delete of a custom category
+  Future<void> _deleteSingleCategory(String category) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete "$category"?'),
+        content: const Text(
+            'Existing transactions will keep this category. This only removes it from the selector.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final updated = await ApiService().deleteCustomCategory(category);
+      if (mounted) {
+        setState(() {
+          _customCategories = updated;
+          _selectedCategories.remove(category);
+          if (_selectedCategory == category) _selectedCategory = 'Other';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Category "$category" removed'),
+              backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('❌ ${e.toString().replaceAll('Exception:', '')}'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // 🚀 Bulk delete selected custom categories
+  Future<void> _deleteSelectedCategories() async {
+    if (_selectedCategories.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete ${_selectedCategories.length} categories?'),
+        content: const Text(
+            'This will remove them from your selector. Existing transactions are unaffected.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete All',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final toDelete = _selectedCategories.toList();
+    int deleted = 0;
+    for (final cat in toDelete) {
+      try {
+        final updated = await ApiService().deleteCustomCategory(cat);
+        if (mounted) {
+          setState(() => _customCategories = updated);
+        }
+        deleted++;
+      } catch (_) {
+        // skip on failure
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _selectedCategories.clear();
+        _categoryManageMode = false;
+        if (!_customCategories.contains(_selectedCategory)) {
+          _selectedCategory = 'Other';
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('$deleted categor(ies) deleted'),
+            backgroundColor: Colors.green),
+      );
+    }
+  }
+
   void _processSmartEntry() async {
     final text = _smartEntryController.text.trim();
     if (text.isEmpty) return;
@@ -69,26 +369,29 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final result = await ApiService().extractExpense(text);
 
     if (mounted) {
-      setState(() => _isExtracting = false);
+      setState(() {
+        _isExtracting = false;
+        if (result != null) {
+          _amountController.text = result['amount']?.toString() ?? '';
+          _descriptionController.text = result['description'] ?? '';
+
+          final detectedCat = result['category']?.toString();
+          if (detectedCat != null && _allCategories.contains(detectedCat)) {
+            _selectedCategory = detectedCat;
+          } else {
+            _selectedCategory = 'Other';
+          }
+
+          if (_selectedCategory == 'Salary' ||
+              _selectedCategory == 'Investment') {
+            _selectedType = 'Income';
+          } else {
+            _selectedType = 'Expense';
+          }
+        }
+      });
+
       if (result != null) {
-        _amountController.text = result['amount']?.toString() ?? '';
-        _descriptionController.text = result['description'] ?? '';
-
-        final detectedCat = result['category']?.toString();
-        if (detectedCat != null && _categories.contains(detectedCat)) {
-          _selectedCategory = detectedCat;
-        } else {
-          _selectedCategory = 'Other';
-        }
-
-        // Auto select type based on category
-        if (_selectedCategory == 'Salary' ||
-            _selectedCategory == 'Investment') {
-          _selectedType = 'Income';
-        } else {
-          _selectedType = 'Expense';
-        }
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('✨ Magic Fill applied! Review and save.'),
@@ -97,8 +400,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('❌ Could not extract details. Please fill manually.'),
+              content: Text(
+                  '❌ Could not extract details. Please fill manually.'),
               backgroundColor: Colors.orange),
         );
       }
@@ -122,7 +425,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     if (mounted) {
       setState(() {
         _isClassifying = false;
-        _selectedCategory = predictedCategory;
+        _selectedCategory = _allCategories.contains(predictedCategory)
+            ? predictedCategory
+            : 'Other';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -156,7 +461,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('❌ ${e.toString().replaceAll('Exception:', '')}'),
+                content:
+                    Text('❌ ${e.toString().replaceAll('Exception:', '')}'),
                 backgroundColor: Colors.red),
           );
         }
@@ -181,7 +487,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 🚀 SMART AI ENTRY SECTION
+            // Smart AI Entry
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -219,8 +525,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             hintText: 'e.g., Ate KFC burger for 500 tk',
-                            hintStyle:
-                                TextStyle(color: Colors.white.withOpacity(0.6)),
+                            hintStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.6)),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.1),
                             contentPadding: const EdgeInsets.symmetric(
@@ -254,7 +560,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
             ),
 
-            // MANUAL ENTRY FORM
+            // Form
             Padding(
               padding: const EdgeInsets.all(20),
               child: Card(
@@ -277,7 +583,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 color: Colors.black87)),
                         const SizedBox(height: 24),
 
-                        // Transaction Type
+                        // Type toggle
                         Container(
                           decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
@@ -287,8 +593,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                             children: [
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _selectedType = 'Expense'),
+                                  onTap: () => setState(
+                                      () => _selectedType = 'Expense'),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12),
@@ -309,18 +615,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                     child: Center(
                                         child: Text('Expense',
                                             style: TextStyle(
-                                                color:
-                                                    _selectedType == 'Expense'
-                                                        ? Colors.white
-                                                        : Colors.grey.shade700,
-                                                fontWeight: FontWeight.bold))),
+                                                color: _selectedType ==
+                                                        'Expense'
+                                                    ? Colors.white
+                                                    : Colors.grey.shade700,
+                                                fontWeight:
+                                                    FontWeight.bold))),
                                   ),
                                 ),
                               ),
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _selectedType = 'Income'),
+                                  onTap: () => setState(
+                                      () => _selectedType = 'Income'),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12),
@@ -341,10 +648,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                     child: Center(
                                         child: Text('Income',
                                             style: TextStyle(
-                                                color: _selectedType == 'Income'
-                                                    ? Colors.white
-                                                    : Colors.grey.shade700,
-                                                fontWeight: FontWeight.bold))),
+                                                color:
+                                                    _selectedType == 'Income'
+                                                        ? Colors.white
+                                                        : Colors.grey
+                                                            .shade700,
+                                                fontWeight:
+                                                    FontWeight.bold))),
                                   ),
                                 ),
                               ),
@@ -388,7 +698,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           maxLines: 2,
                           decoration: InputDecoration(
                             labelText: 'Description (Optional)',
-                            prefixIcon: const Icon(Icons.description_outlined,
+                            prefixIcon: const Icon(
+                                Icons.description_outlined,
                                 color: Colors.indigo),
                             suffixIcon: IconButton(
                               icon: _isClassifying
@@ -399,8 +710,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                           strokeWidth: 2))
                                   : const Icon(Icons.auto_awesome,
                                       color: Colors.amber),
-                              onPressed:
-                                  _isClassifying ? null : _autoClassifyCategory,
+                              onPressed: _isClassifying
+                                  ? null
+                                  : _autoClassifyCategory,
                               tooltip: 'Auto-detect category',
                             ),
                             border: OutlineInputBorder(
@@ -412,13 +724,147 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Category
-                        const Text('Category',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Colors.black87)),
-                        const SizedBox(height: 12),
+                        // Category section header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Text('Category',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.black87)),
+                                if (_categoryManageMode) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    child: Text(
+                                      '${_selectedCategories.length} selected',
+                                      style: TextStyle(
+                                          color: Colors.red.shade700,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (_customCategories.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: _toggleCategoryManageMode,
+                                icon: Icon(
+                                  _categoryManageMode
+                                      ? Icons.close
+                                      : Icons.edit_outlined,
+                                  size: 16,
+                                  color: _categoryManageMode
+                                      ? Colors.red
+                                      : Colors.grey.shade700,
+                                ),
+                                label: Text(
+                                  _categoryManageMode ? 'Done' : 'Manage',
+                                  style: TextStyle(
+                                      color: _categoryManageMode
+                                          ? Colors.red
+                                          : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12),
+                                ),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                ),
+                              )
+                            else
+                              TextButton.icon(
+                                onPressed: _showAddCategoryDialog,
+                                icon: const Icon(Icons.add,
+                                    size: 18, color: Colors.indigo),
+                                label: const Text('Add Custom',
+                                    style: TextStyle(
+                                        color: Colors.indigo,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Manage mode action bar
+                        if (_categoryManageMode) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _selectedCategories.isEmpty
+                                        ? 'Tap categories to select'
+                                        : '${_selectedCategories.length} of ${_customCategories.length} selected',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _selectAllCustomCategories,
+                                  child: Text(
+                                    _selectedCategories.length ==
+                                            _customCategories.length
+                                        ? 'Deselect All'
+                                        : 'Select All',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.indigo),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                ElevatedButton.icon(
+                                  onPressed: _selectedCategories.isEmpty
+                                      ? null
+                                      : _deleteSelectedCategories,
+                                  icon: const Icon(Icons.delete_forever,
+                                      size: 16, color: Colors.white),
+                                  label: const Text('Delete',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    disabledBackgroundColor:
+                                        Colors.grey.shade300,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        // Default categories grid
                         GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -429,70 +875,83 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                             mainAxisSpacing: 10,
                             childAspectRatio: 0.85,
                           ),
-                          itemCount: _categories.length,
+                          itemCount: _defaultCategories.length,
                           itemBuilder: (context, index) {
-                            final category = _categories[index];
-                            final isSelected = _selectedCategory == category;
-                            final color =
-                                _categoryColors[category] ?? Colors.grey;
-
-                            return GestureDetector(
-                              onTap: () =>
-                                  setState(() => _selectedCategory = category),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color:
-                                      isSelected ? color : Colors.grey.shade50,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                      color: isSelected
-                                          ? color
-                                          : Colors.grey.shade200),
-                                  boxShadow: isSelected
-                                      ? [
-                                          BoxShadow(
-                                              color: color.withOpacity(0.3),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 2))
-                                        ]
-                                      : null,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                        _categoryIcons[category] ??
-                                            Icons.category,
-                                        color:
-                                            isSelected ? Colors.white : color,
-                                        size: 24),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      category,
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : Colors.black87),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
+                            return _buildCategoryTile(
+                                _defaultCategories[index],
+                                isCustom: false);
                           },
                         ),
+
+                        // Custom categories
+                        if (_customCategories.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              const Text('Your Custom Categories',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: Colors.indigo)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(10)),
+                                child: Text('${_customCategories.length}',
+                                    style: const TextStyle(
+                                        color: Colors.indigo,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: 0.85,
+                            ),
+                            itemCount: _customCategories.length,
+                            itemBuilder: (context, index) {
+                              return _buildCategoryTile(
+                                  _customCategories[index],
+                                  isCustom: true);
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          // Bottom Add button when there are custom categories
+                          if (!_categoryManageMode)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: _showAddCategoryDialog,
+                                icon: const Icon(Icons.add,
+                                    size: 18, color: Colors.indigo),
+                                label: const Text('Add another category',
+                                    style: TextStyle(
+                                        color: Colors.indigo,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                              ),
+                            ),
+                        ],
+
                         const SizedBox(height: 32),
 
-                        // Submit Button
+                        // Submit
                         SizedBox(
                           height: 55,
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _submitTransaction,
+                            onPressed:
+                                _isLoading ? null : _submitTransaction,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.indigo,
                               shape: RoundedRectangleBorder(
@@ -504,7 +963,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                     height: 24,
                                     width: 24,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2.5, color: Colors.white))
+                                        strokeWidth: 2.5,
+                                        color: Colors.white))
                                 : const Text('Save Transaction',
                                     style: TextStyle(
                                         fontSize: 16,
@@ -518,6 +978,113 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🚀 Category tile — supports selection mode + single delete (long-press on custom)
+  Widget _buildCategoryTile(String category, {required bool isCustom}) {
+    final isSelected = _selectedCategory == category;
+    final isMarked = _selectedCategories.contains(category);
+    final showMark = isCustom && _categoryManageMode;
+    final color = _colorForCategory(category);
+    final icon = _iconForCategory(category);
+
+    // In manage mode, custom tile is highlighted if MARKED; otherwise by selection
+    final highlight = showMark ? isMarked : isSelected;
+    final highlightColor = showMark ? Colors.red : color;
+
+    return GestureDetector(
+      onTap: () {
+        if (showMark) {
+          _toggleCategorySelection(category);
+        } else {
+          setState(() => _selectedCategory = category);
+        }
+      },
+      onLongPress: isCustom && !_categoryManageMode
+          ? () => _deleteSingleCategory(category)
+          : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: highlight ? highlightColor : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: highlight ? highlightColor : Colors.grey.shade200),
+          boxShadow: highlight
+              ? [
+                  BoxShadow(
+                      color: highlightColor.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2))
+                ]
+              : null,
+        ),
+        child: Stack(
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    color: highlight ? Colors.white : color, size: 24),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    category,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: highlight
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                        color:
+                            highlight ? Colors.white : Colors.black87),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            // Custom star badge
+            if (isCustom && !showMark)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.3)
+                        : Colors.indigo.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.star,
+                      size: 8,
+                      color: isSelected ? Colors.white : Colors.indigo),
+                ),
+              ),
+            // Selection checkmark
+            if (showMark)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: isMarked ? Colors.white : Colors.white70,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                      isMarked
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      size: 14,
+                      color: isMarked ? Colors.red : Colors.grey),
+                ),
+              ),
           ],
         ),
       ),

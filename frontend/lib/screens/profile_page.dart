@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../utils/currency_helper.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -10,7 +11,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic> _userData = {};
-  List<dynamic> _transactions = []; // Added to fetch transactions
+  List<dynamic> _transactions = [];
   bool _isLoading = true;
   bool _isEditing = false;
   final _nameController = TextEditingController();
@@ -18,7 +19,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final _savingsGoalController = TextEditingController();
   String _selectedCurrency = 'BDT';
 
-  // Computed values
   double _totalIncome = 0.0;
   double _totalExpenses = 0.0;
 
@@ -42,7 +42,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
     try {
-      // Fetch both profile and transactions concurrently
       final responses = await Future.wait([
         ApiService().getProfile(),
         ApiService().getTransactions(),
@@ -123,7 +122,7 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() {
           _isEditing = false;
         });
-        await _loadProfileData(); // Reload to get updated data
+        await _loadProfileData();
       }
     } catch (e) {
       if (mounted) {
@@ -171,6 +170,8 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+
+  String get _currency => _userData['currency'] ?? 'BDT';
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +226,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    // Profile Avatar with Gradient
+                    // Avatar
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
@@ -267,13 +268,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Stats Cards Row
+                    // Stats
                     Row(
                       children: [
                         Expanded(
                           child: _buildStatCard(
                             'Total Income',
-                            '${_userData['currency'] ?? '৳'} ${_totalIncome.toStringAsFixed(2)}',
+                            CurrencyHelper.format(_totalIncome, _currency),
                             Colors.green,
                             Icons.trending_up,
                           ),
@@ -282,7 +283,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Total Expenses',
-                            '${_userData['currency'] ?? '৳'} ${_totalExpenses.toStringAsFixed(2)}',
+                            CurrencyHelper.format(_totalExpenses, _currency),
                             Colors.red,
                             Icons.trending_down,
                           ),
@@ -304,7 +305,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         Expanded(
                           child: _buildStatCard(
                             'Savings Goal',
-                            '${_userData['currency'] ?? '৳'} ${(_userData['savingsGoal'] ?? 0).toStringAsFixed(2)}',
+                            CurrencyHelper.format(
+                                (_userData['savingsGoal'] ?? 0), _currency),
                             Colors.orange,
                             Icons.savings,
                           ),
@@ -313,7 +315,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Profile Details Card
+                    // Personal Information
                     Card(
                       elevation: 4,
                       shape: RoundedRectangleBorder(
@@ -350,7 +352,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             const Divider(height: 24),
                             _buildEditableDropdownField(
                               'Currency',
-                              _selectedCurrency,
+                              _currencies.contains(_selectedCurrency)
+                                  ? _selectedCurrency
+                                  : _currencies.first,
                               _currencies,
                               _isEditing,
                               Icons.currency_exchange,
@@ -378,7 +382,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Logout Button
+                    // Logout
                     SizedBox(
                       width: double.infinity,
                       height: 55,
@@ -436,7 +440,7 @@ class _ProfilePageState extends State<ProfilePage> {
             Text(
               value,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
@@ -558,7 +562,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       return DropdownMenuItem<String>(
                         value: value,
                         child: Text(
-                          value,
+                          '$value (${CurrencyHelper.symbol(value)})',
                           textAlign: TextAlign.right,
                         ),
                       );
@@ -584,18 +588,8 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final date = DateTime.parse(dateString);
       final months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec'
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
       return '${months[date.month - 1]} ${date.year}';
     } catch (e) {

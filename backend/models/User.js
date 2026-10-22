@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true, 
+        unique: true,
         lowercase: true,
         match: [/^\S+@\S+\.\S+$/, 'Please use a valid email address']
     },
@@ -20,11 +20,24 @@ const userSchema = new mongoose.Schema({
     },
     currency: {
         type: String,
-        default: 'BDT' 
+        default: 'BDT'
     },
     savingsGoal: {
         type: Number,
         default: 0
+    },
+    customCategories: {
+        type: [String],
+        default: []
+    },
+    // Password reset
+    resetPasswordToken: {
+        type: String,
+        default: null
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null
     },
     createdAt: {
         type: Date,
