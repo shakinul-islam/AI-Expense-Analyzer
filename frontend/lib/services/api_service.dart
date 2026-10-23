@@ -7,11 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   static String get baseUrl {
     if (kReleaseMode) return "https://your-live-api-url.onrender.com/api";
-    if (kIsWeb) return "http://localhost:5000/api";
+
+    /* if (kIsWeb) return "http://localhost:5000/api";
     try {
-      if (Platform.isAndroid) return "http://10.0.2.2:5000/api";
+      if (Platform.isAndroid) return "http://10.0.2.2:5000/api"; 
+      if (Platform.isAndroid) return "http://10.0.2.2:5000/api"; 
+
     } catch (_) {}
     return "http://192.168.0.102:5000/api";
+  }
+*/
+
+    return "http://10.224.0.22:5000/api";
   }
 
   static String? _token;
@@ -65,12 +72,14 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> register(String name, String email, String password) async {
+  Future<Map<String, dynamic>> register(
+      String name, String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
       final response = await http.post(url,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name, 'email': email, 'password': password}));
+          body:
+              jsonEncode({'name': name, 'email': email, 'password': password}));
       final data = jsonDecode(response.body);
       if (response.statusCode == 201) return data;
       throw Exception(data['message'] ?? 'Registration failed');
@@ -87,7 +96,8 @@ class ApiService {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'email': email}));
       final data = jsonDecode(response.body);
-      if (response.statusCode == 200) return data['message'] ?? 'Reset link sent';
+      if (response.statusCode == 200)
+        return data['message'] ?? 'Reset link sent';
       throw Exception(data['message'] ?? 'Failed to send reset link');
     } catch (e) {
       if (e.toString().contains('Exception:')) rethrow;
@@ -102,7 +112,8 @@ class ApiService {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'token': token, 'newPassword': newPassword}));
       final data = jsonDecode(response.body);
-      if (response.statusCode == 200) return data['message'] ?? 'Password reset';
+      if (response.statusCode == 200)
+        return data['message'] ?? 'Password reset';
       throw Exception(data['message'] ?? 'Failed to reset password');
     } catch (e) {
       if (e.toString().contains('Exception:')) rethrow;
@@ -141,8 +152,9 @@ class ApiService {
   }) async {
     final headers = await _getHeaders();
     final params = <String, String>{};
-    
-    if (search != null && search.trim().isNotEmpty) params['search'] = search.trim();
+
+    if (search != null && search.trim().isNotEmpty)
+      params['search'] = search.trim();
     if (category != null && category.isNotEmpty) params['category'] = category;
     if (type != null && type.isNotEmpty) params['type'] = type;
     if (from != null) params['from'] = from.toIso8601String();
@@ -150,10 +162,11 @@ class ApiService {
     if (minAmount != null) params['minAmount'] = minAmount.toString();
     if (maxAmount != null) params['maxAmount'] = maxAmount.toString();
 
-    final uri = Uri.parse('$baseUrl/transactions').replace(queryParameters: params);
+    final uri =
+        Uri.parse('$baseUrl/transactions').replace(queryParameters: params);
     final response = await http.get(uri, headers: headers);
     await _handle401(response);
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data is Map && data['data'] is List) return data['data'];
@@ -165,7 +178,8 @@ class ApiService {
   Future<Map<String, dynamic>> addTransaction(Map<String, dynamic> d) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/transactions');
-    final response = await http.post(url, headers: headers, body: jsonEncode(d));
+    final response =
+        await http.post(url, headers: headers, body: jsonEncode(d));
     await _handle401(response);
     if (response.statusCode == 201 || response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -187,7 +201,8 @@ class ApiService {
   Future<int> bulkDeleteTransactions(List<String> ids) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/transactions/bulk-delete');
-    final response = await http.post(url, headers: headers, body: jsonEncode({'ids': ids}));
+    final response =
+        await http.post(url, headers: headers, body: jsonEncode({'ids': ids}));
     await _handle401(response);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -201,7 +216,8 @@ class ApiService {
     final params = <String, String>{};
     if (from != null) params['from'] = from.toIso8601String();
     if (to != null) params['to'] = to.toIso8601String();
-    final uri = Uri.parse('$baseUrl/transactions/export').replace(queryParameters: params);
+    final uri = Uri.parse('$baseUrl/transactions/export')
+        .replace(queryParameters: params);
     final response = await http.get(uri, headers: headers);
     await _handle401(response);
     if (response.statusCode == 200) return response.body;
@@ -232,7 +248,8 @@ class ApiService {
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/user/profile');
-    final response = await http.put(url, headers: headers, body: jsonEncode(data));
+    final response =
+        await http.put(url, headers: headers, body: jsonEncode(data));
     await _handle401(response);
     if (response.statusCode == 200) return jsonDecode(response.body);
     throw Exception('Failed to update profile');
@@ -257,7 +274,8 @@ class ApiService {
   Future<List<String>> addCustomCategory(String category) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/user/categories');
-    final response = await http.post(url, headers: headers, body: jsonEncode({'category': category}));
+    final response = await http.post(url,
+        headers: headers, body: jsonEncode({'category': category}));
     await _handle401(response);
     final data = jsonDecode(response.body);
     if (response.statusCode == 201) {
@@ -280,11 +298,14 @@ class ApiService {
   }
 
   // ===== BUDGET =====
-  Future<Map<String, dynamic>> setBudget(double limit, int month, int year) async {
+  Future<Map<String, dynamic>> setBudget(
+      double limit, int month, int year) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/budgets');
-    final response = await http.post(url, headers: headers,
-        body: jsonEncode({'monthly_limit': limit, 'month': month, 'year': year}));
+    final response = await http.post(url,
+        headers: headers,
+        body:
+            jsonEncode({'monthly_limit': limit, 'month': month, 'year': year}));
     await _handle401(response);
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -352,7 +373,8 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/classify');
-      final response = await http.post(url, headers: headers, body: jsonEncode({'description': description}));
+      final response = await http.post(url,
+          headers: headers, body: jsonEncode({'description': description}));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['category'] ?? 'Other';
@@ -364,7 +386,8 @@ class ApiService {
   Future<String> chatWithAI(String query) async {
     final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/ai/chat');
-    final response = await http.post(url, headers: headers, body: jsonEncode({'query': query}));
+    final response = await http.post(url,
+        headers: headers, body: jsonEncode({'query': query}));
     await _handle401(response);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -377,7 +400,8 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse('$baseUrl/ai/extract');
-      final response = await http.post(url, headers: headers, body: jsonEncode({'text': text}));
+      final response = await http.post(url,
+          headers: headers, body: jsonEncode({'text': text}));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['data'];
