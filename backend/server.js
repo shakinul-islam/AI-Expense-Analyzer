@@ -36,7 +36,9 @@ if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.startsWith('gsk_')) {
 }
 
 // Middleware
-app.use(express.json());
+// 🚀 FIX: Increase payload limit for Base64 images (Profile Pictures)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 app.use(cors({
     origin: '*',
