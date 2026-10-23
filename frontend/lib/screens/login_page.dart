@@ -182,7 +182,25 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
-                        const SizedBox(height: 20),
+                        
+                        // 🚀 FORGOT PASSWORD LINK
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/forgot-password');
+                            },
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                color: Colors.indigo,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 10),
                         SizedBox(
                           height: 50,
                           child: ElevatedButton(

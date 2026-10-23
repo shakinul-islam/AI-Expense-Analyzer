@@ -3,13 +3,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/api_service.dart';
+import '../utils/currency_helper.dart';
 import 'add_transaction_page.dart';
 import 'profile_page.dart';
 import 'ai_chat_page.dart';
+import 'transactions_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -20,17 +20,16 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   List<dynamic> _transactions = [];
-  List<dynamic> _filteredTransactions = []; // 🚀 New: To store month-wise data
-  List<dynamic> _allBudgets = []; // 🚀 New: To store all budgets
+  List<dynamic> _filteredTransactions = [];
+  List<dynamic> _allBudgets = [];
 
   Map<String, dynamic> _userData = {};
   List<dynamic> _notifications = [];
-  int _selectedIndex = 0; // 0: Home, 1: Insights
+  int _selectedIndex = 0;
   bool _isLoading = true;
   bool _isRefreshing = false;
   String _error = '';
 
-  // 🚀 New: Selected Month state
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   double _totalIncome = 0;
@@ -39,14 +38,16 @@ class _DashboardPageState extends State<DashboardPage> {
   double _monthlyBudget = 0;
 
   final List<Color> _chartColors = [
-    const Color(0xFFF59E0B), // Amber
-    const Color(0xFF3B82F6), // Blue
-    const Color(0xFF8B5CF6), // Purple
-    const Color(0xFFEF4444), // Red
-    const Color(0xFF10B981), // Teal
-    const Color(0xFF6366F1), // Indigo
-    const Color(0xFFEC4899), // Pink
+    const Color(0xFFF59E0B),
+    const Color(0xFF3B82F6),
+    const Color(0xFF8B5CF6),
+    const Color(0xFFEF4444),
+    const Color(0xFF10B981),
+    const Color(0xFF6366F1),
+    const Color(0xFFEC4899),
   ];
+
+  String get _currency => _userData['currency'] ?? 'BDT';
 
   @override
   void initState() {
@@ -75,7 +76,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final transactions = await ApiService().getTransactions();
       setState(() {
         _transactions = transactions;
-        _filterDataByMonth(); // 🚀 Apply filter after fetching
+        _filterDataByMonth();
       });
     } catch (e) {
       throw Exception('Failed to load transactions');
@@ -106,29 +107,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadBudget() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      final response = await http.get(
-        Uri.parse('${ApiService.baseUrl}/budgets'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        _allBudgets = jsonDecode(response.body);
-        _filterDataByMonth(); // 🚀 Apply filter to select budget for the month
-      }
+      final budgets = await ApiService().getBudgets();
+      setState(() {
+        _allBudgets = budgets;
+        _filterDataByMonth();
+      });
     } catch (e) {
       print('Load budget error: $e');
     }
   }
 
-  // 🚀 New Method: Filters data based on selected month
   void _filterDataByMonth() {
     setState(() {
-      // Filter transactions
       _filteredTransactions = _transactions.where((t) {
         if (t['date'] == null) return false;
         DateTime date = DateTime.parse(t['date']).toLocal();
@@ -136,7 +126,6 @@ class _DashboardPageState extends State<DashboardPage> {
             date.month == _selectedMonth.month;
       }).toList();
 
-      // Extract budget for selected month
       final currentBudgets = _allBudgets
           .cast<Map<String, dynamic>>()
           .where((b) =>
@@ -156,41 +145,28 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _saveBudget(double amount) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
+      await ApiService()
+          .setBudget(amount, _selectedMonth.month, _selectedMonth.year);
 
-      final response = await http.post(
-        Uri.parse('${ApiService.baseUrl}/budgets'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'monthly_limit': amount,
-          'month': _selectedMonth.month, // 🚀 Save budget for selected month
-          'year': _selectedMonth.year,
-        }),
+      setState(() {
+        _monthlyBudget = amount;
+      });
+      await _loadBudget();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(amount == 0
+              ? 'Budget removed'
+              : 'Budget updated successfully!'),
+          backgroundColor: amount == 0 ? Colors.orange : Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        setState(() {
-          _monthlyBudget = amount;
-          // Refresh budgets in background
-          _loadBudget();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(amount == 0
-                ? 'Budget removed'
-                : 'Budget updated successfully!'),
-            backgroundColor: amount == 0 ? Colors.orange : Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: const Text('Failed to update budget'),
@@ -226,7 +202,7 @@ class _DashboardPageState extends State<DashboardPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Budget Amount',
-                prefixText: '৳ ',
+                prefixText: '${CurrencyHelper.symbol(_currency)} ',
                 filled: true,
                 fillColor: Colors.grey.shade50,
                 border: OutlineInputBorder(
@@ -278,34 +254,40 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _deleteTransaction(String id) async {
+    final int index = _transactions.indexWhere((t) => t['_id'] == id);
+    if (index == -1) return;
+    final dynamic removed = _transactions[index];
+
     setState(() {
-      _transactions.removeWhere((t) => t['_id'] == id);
-      _filterDataByMonth(); // Re-filter after delete
+      _transactions.removeAt(index);
+      _filterDataByMonth();
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      final response = await http.delete(
-        Uri.parse('${ApiService.baseUrl}/transactions/$id'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
+      await ApiService().deleteTransaction(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: const Text('Transaction deleted successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10))),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: const Text('Transaction deleted successfully'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
-        );
-      }
     } catch (e) {
-      print('Delete error: $e');
+      if (!mounted) return;
+      setState(() {
+        _transactions.insert(index, removed);
+        _filterDataByMonth();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: const Text('Delete failed — restored'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10))),
+      );
     }
   }
 
@@ -330,35 +312,6 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() => _isRefreshing = false);
   }
 
-  void _logout() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title:
-            const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to logout?'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child:
-                  const Text('Cancel', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () {
-              ApiService().logout();
-              if (mounted) Navigator.pushReplacementNamed(context, '/');
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
-            child: const Text('Logout', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _navigateToAddTransaction() {
     Navigator.push(
       context,
@@ -378,6 +331,13 @@ class _DashboardPageState extends State<DashboardPage> {
   void _navigateToAiChat() {
     Navigator.push(
         context, MaterialPageRoute(builder: (_) => const AiChatPage()));
+  }
+
+  void _navigateToTransactions() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TransactionsPage(currency: _currency)),
+    ).then((_) => _refreshData());
   }
 
   void _onBottomNavTap(int index) {
@@ -407,13 +367,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String _formatNotificationMessage(String originalMsg) {
     if (_monthlyBudget > 0 && originalMsg.contains('budget of')) {
+      final sym = CurrencyHelper.symbol(_currency);
       return originalMsg.replaceAll(RegExp(r'budget of ৳[0-9]+'),
-          'budget of ৳${_monthlyBudget.toStringAsFixed(0)}');
+          'budget of $sym${_monthlyBudget.toStringAsFixed(0)}');
     }
     return originalMsg;
   }
 
-  // 🚀 New: Generate list of last 12 months dynamically
   List<DateTime> _generateMonthsList() {
     List<DateTime> months = [];
     DateTime now = DateTime.now();
@@ -422,6 +382,46 @@ class _DashboardPageState extends State<DashboardPage> {
       months.add(DateTime(current.year, current.month - i));
     }
     return months;
+  }
+
+  // 🚀 Helper to build profile image (from base64)
+  Widget _buildSmallProfileImage() {
+    final base64Image = _userData['profilePicture'];
+    if (base64Image != null && base64Image.toString().isNotEmpty) {
+      try {
+        final bytes = base64Decode(base64Image);
+        return ClipOval(
+          child: Image.memory(
+            bytes,
+            width: 45,
+            height: 45,
+            fit: BoxFit.cover,
+          ),
+        );
+      } catch (e) {
+        // Fallback
+      }
+    }
+    // Default avatar with initial
+    return Container(
+      width: 45,
+      height: 45,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          _userData['name']?.isNotEmpty == true
+              ? _userData['name'][0].toUpperCase()
+              : 'U',
+          style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white),
+        ),
+      ),
+    );
   }
 
   @override
@@ -451,9 +451,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
                       _buildSliverAppBar(),
-                      SliverToBoxAdapter(
-                          child:
-                              _buildMonthSelector()), // 🚀 Month Selector added here
+                      SliverToBoxAdapter(child: _buildMonthSelector()),
                       if (_selectedIndex == 0) ..._buildHomeSlivers(),
                       if (_selectedIndex == 1) ..._buildInsightsSlivers(),
                       const SliverPadding(
@@ -473,19 +471,27 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // ==========================================
-  // VIEW SLIVERS
-  // ==========================================
-
   Widget _buildSliverAppBar() {
     return SliverAppBar(
       expandedHeight: 140,
       floating: false,
       pinned: true,
+      automaticallyImplyLeading: false,
       backgroundColor: Colors.indigo,
       foregroundColor: Colors.white,
       elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
+        // 🚀 App Name "Spendora" in the center
+        centerTitle: true,
+        title: const Text(
+          'Spendora',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+            color: Colors.white,
+          ),
+        ),
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -507,24 +513,31 @@ class _DashboardPageState extends State<DashboardPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            'Welcome back,',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white.withOpacity(0.8)),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _userData['name'] ?? 'User',
-                            style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                                color: Colors.white),
+                          // 🚀 Profile Picture before Name
+                          _buildSmallProfileImage(),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text(
+                                _userData['name'] ?? 'User',
+                                style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.5,
+                                    color: Colors.white),
+                              ),
+                              Text(
+                                'Welcome back,',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                    color: Colors.white.withOpacity(0.8)),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -573,18 +586,10 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.logout, size: 22),
-          onPressed: _logout,
-          tooltip: 'Logout',
-        ),
-        const SizedBox(width: 8)
-      ],
+      actions: const [],
     );
   }
 
-  // 🚀 New Widget: Horizontal Month Selector
   Widget _buildMonthSelector() {
     final months = _generateMonthsList();
     return Container(
@@ -667,7 +672,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     color: Color(0xFF1E293B)),
               ),
               GestureDetector(
-                onTap: _showAllTransactionsDialog,
+                onTap: _navigateToTransactions,
                 child: const Text('View All',
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
@@ -678,7 +683,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-      _filteredTransactions.isEmpty // 🚀 Uses filtered data
+      _filteredTransactions.isEmpty
           ? SliverToBoxAdapter(child: _buildEmptyState())
           : SliverList(
               delegate: SliverChildBuilderDelegate(
@@ -710,7 +715,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-      if (_filteredTransactions.isEmpty) // 🚀 Uses filtered data
+      if (_filteredTransactions.isEmpty)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: 40),
@@ -730,14 +735,9 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
   }
 
-  // ==========================================
-  // MODERN SUMMARY CARDS
-  // ==========================================
-
   Widget _buildModernSummaryCards() {
     return Column(
       children: [
-        // BIG BALANCE CARD
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -772,7 +772,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      _userData['currency'] ?? 'BDT',
+                      _currency,
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -783,7 +783,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                '৳${_balance.toStringAsFixed(0)}',
+                CurrencyHelper.format(_balance, _currency),
                 style: const TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.w800,
@@ -799,7 +799,7 @@ class _DashboardPageState extends State<DashboardPage> {
             Expanded(
               child: _buildMiniStatCard(
                 'Income',
-                '৳${_totalIncome.toStringAsFixed(0)}',
+                CurrencyHelper.format(_totalIncome, _currency),
                 const Color(0xFF10B981),
                 Icons.arrow_downward_rounded,
               ),
@@ -808,7 +808,7 @@ class _DashboardPageState extends State<DashboardPage> {
             Expanded(
               child: _buildMiniStatCard(
                 'Expenses',
-                '৳${_totalExpense.toStringAsFixed(0)}',
+                CurrencyHelper.format(_totalExpense, _currency),
                 const Color(0xFFEF4444),
                 Icons.arrow_upward_rounded,
               ),
@@ -859,11 +859,11 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: TextStyle(
-                fontSize: 18,
+            style: const TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
-                color: const Color(0xFF1E293B)),
+                color: Color(0xFF1E293B)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -872,11 +872,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // ==========================================
-  // CHARTS IMPLEMENTATION
-  // ==========================================
-
-  // 🚀 New: Extract categories locally from filtered transactions
   List<Map<String, dynamic>> _getLocalExpenseCategories() {
     Map<String, double> catMap = {};
     for (var tx in _filteredTransactions) {
@@ -893,7 +888,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildPieChartCard() {
     final expenseCategories = _getLocalExpenseCategories();
-
     if (expenseCategories.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -986,14 +980,13 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // 🚀 Modified: Bar chart aggregates data into 5 weeks for the selected month
   Widget _buildBarChartCard() {
     List<Map<String, dynamic>> weeklyData = [
-      {'label': 'W1', 'income': 0.0, 'expense': 0.0}, // Days 1-7
-      {'label': 'W2', 'income': 0.0, 'expense': 0.0}, // Days 8-14
-      {'label': 'W3', 'income': 0.0, 'expense': 0.0}, // Days 15-21
-      {'label': 'W4', 'income': 0.0, 'expense': 0.0}, // Days 22-28
-      {'label': 'W5', 'income': 0.0, 'expense': 0.0}, // Days 29-End
+      {'label': 'W1', 'income': 0.0, 'expense': 0.0},
+      {'label': 'W2', 'income': 0.0, 'expense': 0.0},
+      {'label': 'W3', 'income': 0.0, 'expense': 0.0},
+      {'label': 'W4', 'income': 0.0, 'expense': 0.0},
+      {'label': 'W5', 'income': 0.0, 'expense': 0.0},
     ];
 
     for (var tx in _filteredTransactions) {
@@ -1146,10 +1139,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // ==========================================
-  // WIDGETS
-  // ==========================================
-
   Widget _buildBudgetWidget() {
     double progress = 0.0;
     if (_monthlyBudget > 0) {
@@ -1157,9 +1146,9 @@ class _DashboardPageState extends State<DashboardPage> {
       if (progress > 1.0) progress = 1.0;
     }
 
-    Color progressColor = const Color(0xFF10B981); // Green
-    if (progress > 0.75) progressColor = const Color(0xFFF59E0B); // Orange
-    if (progress > 0.90) progressColor = const Color(0xFFEF4444); // Red
+    Color progressColor = const Color(0xFF10B981);
+    if (progress > 0.75) progressColor = const Color(0xFFF59E0B);
+    if (progress > 0.90) progressColor = const Color(0xFFEF4444);
 
     return GestureDetector(
       onTap: _showBudgetDialog,
@@ -1236,7 +1225,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       Row(
                         children: [
-                          Text('৳${_monthlyBudget.toStringAsFixed(0)}',
+                          Text(
+                              CurrencyHelper.format(_monthlyBudget, _currency),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
@@ -1262,13 +1252,14 @@ class _DashboardPageState extends State<DashboardPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Spent: ৳${_totalExpense.toStringAsFixed(0)}',
+                      Text(
+                          'Spent: ${CurrencyHelper.format(_totalExpense, _currency)}',
                           style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 13,
                               fontWeight: FontWeight.w600)),
                       Text(
-                        'Remaining: ৳${(_monthlyBudget - _totalExpense).toStringAsFixed(0)}',
+                        'Remaining: ${CurrencyHelper.format((_monthlyBudget - _totalExpense), _currency)}',
                         style: TextStyle(
                           color: (_monthlyBudget - _totalExpense) < 0
                               ? Colors.red
@@ -1442,7 +1433,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   Text(
-                    '${isIncome ? '+' : '-'}৳${amount.toStringAsFixed(0)}',
+                    '${isIncome ? '+' : '-'}${CurrencyHelper.format(amount, _currency)}',
                     style: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: color,
@@ -1598,9 +1589,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
                 Text(
-                  '${isIncome ? '+' : '-'}৳${amount.toStringAsFixed(0)}',
+                  '${isIncome ? '+' : '-'}${CurrencyHelper.format(amount, _currency)}',
                   style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
                       color: isIncome ? Colors.green : const Color(0xFF1E293B)),
@@ -1763,10 +1754,21 @@ class _DashboardPageState extends State<DashboardPage> {
                               child: const Icon(Icons.delete_outline_rounded,
                                   color: Colors.white, size: 28),
                             ),
-                            onDismissed: (direction) {
+                            onDismissed: (direction) async {
+                              final removed = _notifications[index];
                               setModalState(() {
                                 _notifications.removeAt(index);
                               });
+                              try {
+                                await ApiService().deleteNotification(
+                                    notification['_id'] ?? '');
+                              } catch (_) {
+                                if (mounted) {
+                                  setModalState(() {
+                                    _notifications.insert(index, removed);
+                                  });
+                                }
+                              }
                             },
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 16),
@@ -1842,9 +1844,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                   if (isUnread) {
                                     await ApiService().markNotificationRead(
                                         notification['_id']);
-                                    _refreshData();
-                                    Navigator.pop(context);
-                                    _showNotificationsDialog();
+                                    setModalState(() {
+                                      _notifications[index]['status'] =
+                                          'read';
+                                    });
                                   }
                                 },
                               ),
@@ -1853,59 +1856,6 @@ class _DashboardPageState extends State<DashboardPage> {
                         },
                       );
                     }),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAllTransactionsDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFFF8FAFC),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.90,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 24, bottom: 8),
-              child: Center(
-                child: Container(
-                  width: 48,
-                  height: 6,
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Text(
-                  'All Transactions (${DateFormat('MMM yyyy').format(_selectedMonth)})',
-                  style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B))),
-            ),
-            Expanded(
-              child: _filteredTransactions.isEmpty // 🚀 Uses filtered data
-                  ? const Center(
-                      child: Text('No transactions found',
-                          style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: _filteredTransactions.length,
-                      itemBuilder: (context, index) {
-                        return _buildTransactionCard(
-                            _filteredTransactions[index]);
-                      },
-                    ),
             ),
           ],
         ),

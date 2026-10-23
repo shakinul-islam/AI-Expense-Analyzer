@@ -76,7 +76,7 @@ const getExpenseInsight = async (transactions, userProfile = {}) => {
         * **[Category 3]:** [Amount] ${currency}
         `;
 
-        const modelToUse = await getModelName('heavy'); // 🚀 Awaits the valid model
+        const modelToUse = await getModelName('heavy');
         
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
@@ -100,7 +100,7 @@ const autoClassifyTransaction = async (description) => {
         const prompt = `Classify this expense into exactly ONE category: Food, Transport, Shopping, Entertainment, Bills, Health, Education, Salary, Investment, Other. 
         Description: "${description}". Reply ONLY with the category name.`;
 
-        const modelToUse = await getModelName('heavy'); // 🚀 Awaits the valid model
+        const modelToUse = await getModelName('heavy');
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
@@ -117,7 +117,7 @@ const autoClassifyTransaction = async (description) => {
     }
 };
 
-// 3. Interactive AI Chat (New Feature)
+// 3. Interactive AI Chat
 const askFinancialAssistant = async (query, contextData) => {
     try {
         if (!groq) return "Sorry, AI assistant is currently unavailable.";
@@ -135,7 +135,7 @@ const askFinancialAssistant = async (query, contextData) => {
         Answer the user's question clearly and directly in English. Do not show unnecessary calculation steps. Give a clean, professional answer based on the numbers provided.
         `;
 
-        const modelToUse = await getModelName('fast'); // 🚀 Awaits the valid model
+        const modelToUse = await getModelName('fast');
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
@@ -151,7 +151,7 @@ const askFinancialAssistant = async (query, contextData) => {
     }
 };
 
-// 4. Smart Text to Expense Extraction (New Feature)
+// 4. Smart Text to Expense Extraction (Fixed for newer models)
 const extractExpenseDetails = async (text) => {
     try {
         if (!groq) return null;
@@ -160,7 +160,7 @@ const extractExpenseDetails = async (text) => {
         You are an expert financial assistant. Extract expense details from this input: "${text}".
         Categories allowed: Food, Transport, Shopping, Entertainment, Bills, Health, Education, Salary, Investment, Other.
         
-        Respond ONLY with a valid JSON object. No extra text or markdown formatting.
+        Respond ONLY with a valid JSON object. No extra text, no markdown formatting, no code fences.
         Format strictly like this:
         {
           "amount": 500,
@@ -169,16 +169,29 @@ const extractExpenseDetails = async (text) => {
         }
         `;
 
-        const modelToUse = await getModelName('fast'); // 🚀 Awaits the valid model
+        const modelToUse = await getModelName('fast');
 
+        // 🚀 FIX: response_format removed because some Groq models don't support it
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
             model: modelToUse,
             temperature: 0.1,
-            response_format: { type: "json_object" },
         });
 
-        return JSON.parse(chatCompletion.choices[0]?.message?.content);
+        let raw = chatCompletion.choices[0]?.message?.content || '';
+
+        // 🚀 FIX: Strip markdown code fences (```json ... ```) if present
+        raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        // Try to extract only the JSON object part
+        const jsonStart = raw.indexOf('{');
+        const jsonEnd = raw.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+            raw = raw.substring(jsonStart, jsonEnd + 1);
+        }
+
+        // Return parsed JSON
+        return JSON.parse(raw);
     } catch (error) {
         console.error("❌ Extraction Error:", error.message);
         return null;

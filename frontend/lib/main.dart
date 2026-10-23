@@ -3,9 +3,11 @@ import 'screens/landing_page.dart';
 import 'screens/login_page.dart';
 import 'screens/register_page.dart';
 import 'screens/dashboard_page.dart';
-import 'screens/add_transaction_page.dart';  // ← Add this
-import 'screens/profile_page.dart';          // ← Add this
-import 'screens/ai_chat_page.dart';          // ← Add this
+import 'screens/add_transaction_page.dart';
+import 'screens/profile_page.dart';
+import 'screens/ai_chat_page.dart';
+import 'screens/forgot_password_page.dart';
+import 'screens/reset_password_page.dart';
 
 void main() => runApp(const ExpenseAnalyzerApp());
 
@@ -56,20 +58,20 @@ class ExpenseAnalyzerApp extends StatelessWidget {
           ),
         ),
       ),
-      // ===== ROUTING CONFIGURATION =====
       initialRoute: '/',
       routes: {
         '/': (context) => const LandingPage(),
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/dashboard': (context) => const DashboardPage(),
-        '/add-transaction': (context) => const AddTransactionPage(),  // ← Add this
-        '/profile': (context) => const ProfilePage(),                 // ← Add this
-        '/ai-chat': (context) => const AiChatPage(),                  // ← Add this
+        '/add-transaction': (context) => const AddTransactionPage(),
+        '/profile': (context) => const ProfilePage(),
+        '/ai-chat': (context) => const AiChatPage(),
+        '/forgot-password': (context) => const ForgotPasswordPage(),
+        '/reset-password': (context) => const ResetPasswordPage(),
       },
-      // ===== FALLBACK FOR UNKNOWN ROUTES =====
+      // Fallback for unknown routes
       onGenerateRoute: (settings) {
-        // If route is not found, go to landing page
         return MaterialPageRoute(
           builder: (context) => const LandingPage(),
         );
